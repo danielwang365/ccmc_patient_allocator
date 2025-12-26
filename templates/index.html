@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Allocator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0f1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a2332;
+            --bg-card-hover: #1f2b3d;
+            --accent-teal: #14b8a6;
+            --accent-teal-dim: #0d9488;
+            --accent-amber: #f59e0b;
+            --accent-rose: #f43f5e;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #2d3a4f;
+            --team-a: #3b82f6;
+            --team-b: #8b5cf6;
+            --team-n: #ec4899;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(ellipse at 20% 0%, rgba(20, 184, 166, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(139, 92, 246, 0.06) 0%, transparent 50%);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-teal) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            font-weight: 300;
+        }
+
+        .panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .panel-title::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: var(--accent-teal);
+            border-radius: 2px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .form-group {
+            flex: 1;
+            min-width: 150px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.4rem;
+            font-weight: 500;
+        }
+
+        input[type="text"], select {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input[type="text"]:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-teal);
+            box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding-top: 1.8rem;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent-teal);
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--accent-teal);
+            color: var(--bg-primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-teal-dim);
+            transform: translateY(-1px);
+        }
+
+        .btn-small {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+        }
+
+        .btn-add {
+            background: rgba(20, 184, 166, 0.15);
+            color: var(--accent-teal);
+            border: 1px solid var(--accent-teal);
+        }
+
+        .btn-add:hover {
+            background: rgba(20, 184, 166, 0.25);
+        }
+
+        .btn-remove {
+            background: rgba(244, 63, 94, 0.15);
+            color: var(--accent-rose);
+            border: 1px solid var(--accent-rose);
+        }
+
+        .btn-remove:hover {
+            background: rgba(244, 63, 94, 0.25);
+        }
+
+        .btn-delete {
+            background: transparent;
+            color: var(--text-muted);
+            padding: 0.4rem;
+        }
+
+        .btn-delete:hover {
+            color: var(--accent-rose);
+        }
+
+        .teams-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .team-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .team-section:nth-child(1) { animation-delay: 0.1s; }
+        .team-section:nth-child(2) { animation-delay: 0.2s; }
+        .team-section:nth-child(3) { animation-delay: 0.3s; }
+
+        .team-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .team-badge {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .team-badge.team-a { background: rgba(59, 130, 246, 0.2); color: var(--team-a); }
+        .team-badge.team-b { background: rgba(139, 92, 246, 0.2); color: var(--team-b); }
+        .team-badge.team-n { background: rgba(236, 72, 153, 0.2); color: var(--team-n); }
+
+        .team-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .team-count {
+            margin-left: auto;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .physician-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            transition: all 0.2s;
+            animation: scaleIn 0.3s ease-out;
+        }
+
+        .physician-card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent-teal);
+        }
+
+        .physician-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .physician-name {
+            font-weight: 600;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .new-badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--accent-amber);
+            border-radius: 4px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .physician-stats {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-teal);
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.2rem;
+        }
+
+        .physician-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 0.75rem;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            h1 { font-size: 1.8rem; }
+            .form-row { flex-direction: column; }
+            .checkbox-group { padding-top: 0; }
+            .teams-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Patient Allocator</h1>
+            <p>Manage physician assignments and patient distribution</p>
+        </header>
+
+        <div class="panel">
+            <div class="panel-title">Add New Physician</div>
+            <form id="addPhysicianForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="name">Physician Name</label>
+                        <input type="text" id="name" placeholder="Dr. Smith" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="team">Team</label>
+                        <select id="team">
+                            <option value="A">Team A</option>
+                            <option value="B">Team B</option>
+                            <option value="N">Team N</option>
+                        </select>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="isNew">
+                        <label for="isNew">New Physician</label>
+                    </div>
+                    <div class="form-group" style="flex: 0;">
+                        <label>&nbsp;</label>
+                        <button type="submit" class="btn btn-primary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M12 5v14M5 12h14"/>
+                            </svg>
+                            Add
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="teams-grid">
+            <div class="team-section">
+                <div class="team-header">
+                    <div class="team-badge team-a">A</div>
+                    <div class="team-title">Team A</div>
+                    <div class="team-count"><span id="teamACount">0</span> physicians</div>
+                </div>
+                <div id="teamAList" class="physician-list">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        <p>No physicians in Team A</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="team-section">
+                <div class="team-header">
+                    <div class="team-badge team-b">B</div>
+                    <div class="team-title">Team B</div>
+                    <div class="team-count"><span id="teamBCount">0</span> physicians</div>
+                </div>
+                <div id="teamBList" class="physician-list">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        <p>No physicians in Team B</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="team-section">
+                <div class="team-header">
+                    <div class="team-badge team-n">N</div>
+                    <div class="team-title">Team N</div>
+                    <div class="team-count"><span id="teamNCount">0</span> physicians</div>
+                </div>
+                <div id="teamNList" class="physician-list">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        <p>No physicians in Team N</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        async function fetchPhysicians() {
+            const response = await fetch(`${API_BASE}/physicians`);
+            return response.json();
+        }
+
+        function createPhysicianCard(physician) {
+            return `
+                <div class="physician-card" data-id="${physician.id}">
+                    <div class="physician-header">
+                        <div class="physician-name">
+                            ${physician.name}
+                            ${physician.is_new ? '<span class="new-badge">New</span>' : ''}
+                        </div>
+                        <button class="btn btn-delete" onclick="deletePhysician('${physician.id}')" title="Remove physician">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="physician-stats">
+                        <div class="stat">
+                            <span class="stat-value">${physician.total_patients}</span>
+                            <span class="stat-label">Total Patients</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-value">${physician.step_down_patients}</span>
+                            <span class="stat-label">Step-Down</span>
+                        </div>
+                    </div>
+                    <div class="physician-actions">
+                        <button class="btn btn-small btn-add" onclick="addPatient('${physician.id}', false)">+ Patient</button>
+                        <button class="btn btn-small btn-add" onclick="addPatient('${physician.id}', true)">+ Step-Down</button>
+                        <button class="btn btn-small btn-remove" onclick="removePatient('${physician.id}', false)">− Patient</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function renderPhysicians() {
+            const physicians = await fetchPhysicians();
+            
+            const teamA = physicians.filter(p => p.team === 'A');
+            const teamB = physicians.filter(p => p.team === 'B');
+            const teamN = physicians.filter(p => p.team === 'N');
+
+            document.getElementById('teamACount').textContent = teamA.length;
+            document.getElementById('teamBCount').textContent = teamB.length;
+            document.getElementById('teamNCount').textContent = teamN.length;
+
+            const renderTeam = (team, listId) => {
+                const listEl = document.getElementById(listId);
+                if (team.length === 0) {
+                    listEl.innerHTML = `
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                            <p>No physicians yet</p>
+                        </div>
+                    `;
+                } else {
+                    listEl.innerHTML = team.map(createPhysicianCard).join('');
+                }
+            };
+
+            renderTeam(teamA, 'teamAList');
+            renderTeam(teamB, 'teamBList');
+            renderTeam(teamN, 'teamNList');
+        }
+
+        document.getElementById('addPhysicianForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('name').value.trim();
+            const team = document.getElementById('team').value;
+            const isNew = document.getElementById('isNew').checked;
+
+            if (!name) return;
+
+            await fetch(`${API_BASE}/physicians`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, team, is_new: isNew })
+            });
+
+            document.getElementById('name').value = '';
+            document.getElementById('isNew').checked = false;
+            renderPhysicians();
+        });
+
+        async function addPatient(id, isStepDown) {
+            await fetch(`${API_BASE}/physicians/${id}/add-patient`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_step_down: isStepDown })
+            });
+            renderPhysicians();
+        }
+
+        async function removePatient(id, isStepDown) {
+            const response = await fetch(`${API_BASE}/physicians/${id}/remove-patient`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_step_down: isStepDown })
+            });
+            
+            if (!response.ok) {
+                const data = await response.json();
+                alert(data.error || 'Error removing patient');
+            }
+            renderPhysicians();
+        }
+
+        async function deletePhysician(id) {
+            if (!confirm('Remove this physician?')) return;
+            
+            await fetch(`${API_BASE}/physicians/${id}`, {
+                method: 'DELETE'
+            });
+            renderPhysicians();
+        }
+
+        // Initial load
+        renderPhysicians();
+    </script>
+</body>
+</html>
+
