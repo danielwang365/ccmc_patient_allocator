@@ -209,19 +209,27 @@ class Physician():
         return f"Physician({self.name}, {self.team}, {self.total_patients})"
 
     def add_patient(self, is_step_down : bool = False):
-        self.total_patients += 1
-
+        # IMPORTANT: Step-down patients do NOT count towards total_patients
+        # They are tracked separately in step_down_patients
         if is_step_down:
+            # Step-down patient: only increment step_down_patients, NOT total_patients
             self.step_down_patients += 1
+        else:
+            # Regular patient: increment total_patients
+            self.total_patients += 1
 
     def remove_patient(self, is_step_down: bool = False):
-        if self.total_patients < 1:
-            raise Exception("You don't have any patients")
-
-        self.total_patients -= 1
-        
+        # IMPORTANT: Step-down patients do NOT count towards total_patients
         if is_step_down:
+            # Step-down patient: only decrement step_down_patients, NOT total_patients
+            if self.step_down_patients < 1:
+                raise Exception("You don't have any step-down patients")
             self.step_down_patients -= 1
+        else:
+            # Regular patient: decrement total_patients
+            if self.total_patients < 1:
+                raise Exception("You don't have any patients")
+            self.total_patients -= 1
 
     def set_total_patients(self, n : int):
         self.total_patients = n
@@ -276,6 +284,8 @@ def allocate_patients(
         return gained_stepdown < 1
     
     # First, allocate step down patients: Team B first, then Team A
+    # IMPORTANT: Step-down patients do NOT count towards total new patient pools
+    # They only reduce n_step_down_patients, NOT n_total_new_patients, n_A_new_patients, n_B_new_patients, or n_N_new_patients
     # Simple algorithm:
     # 1. Get all Team B physicians (working only)
     # 2. Sort by INITIAL StepDown count (lowest to highest) - use initial_stepdown_counts
@@ -359,8 +369,12 @@ def allocate_patients(
     
     # Second, fix physicians who are more than 1 less than the minimum value
     # (i.e., if minimum is 10, fix physicians with 8 or fewer patients)
+    # EXCLUDE new physicians - they will be handled in the next phase
     threshold = minimum_patients - 2
     for physician in physicians:
+        # Skip new physicians - they get exactly new_start_number in the next phase
+        if physician.is_new:
+            continue
         if physician.total_patients <= threshold and can_take_patient(physician):
             needed = minimum_patients - physician.total_patients
             # Allocate from the physician's team pool
@@ -389,33 +403,65 @@ def allocate_patients(
                     else:
                         break
 
-    # Third, fill up new physicians to new_start_number using patients from their specific team pool
+    # Third, fill up new physicians to EXACTLY new_start_number
+    # IMPORTANT: New physicians get exactly new_start_number patients (if below it) or 0 (if already at/above it)
+    # They do NOT participate in the general distribution cycle
+    # Priority: own team pool first, then other pools if needed
     for physician in physicians:
         if physician.is_new:
-            while physician.total_patients < new_start_number and can_take_patient(physician):
-                # Allocate from the physician's team pool
-                if physician.team == 'A':
+            # Calculate how many patients are needed to reach new_start_number
+            needed = new_start_number - physician.total_patients
+            # If already at or above new_start_number, needed will be <= 0, so skip allocation
+            # This ensures new physicians who are already at new_start_number get 0 patients
+            if needed <= 0:
+                continue  # Skip - already at or above new_start_number, should get 0
+            # Allocate exactly the number needed to reach new_start_number
+            while needed > 0 and can_take_patient(physician):
+                allocated = False
+                
+                # First, try to allocate from physician's own team pool
+                if physician.team == 'A' and n_A_new_patients > 0:
+                    physician.add_patient()
+                    n_A_new_patients -= 1
+                    n_total_new_patients -= 1
+                    needed -= 1
+                    allocated = True
+                elif physician.team == 'B' and n_B_new_patients > 0:
+                    physician.add_patient()
+                    n_B_new_patients -= 1
+                    n_total_new_patients -= 1
+                    needed -= 1
+                    allocated = True
+                elif physician.team == 'N' and n_N_new_patients > 0:
+                    physician.add_patient()
+                    n_N_new_patients -= 1
+                    n_total_new_patients -= 1
+                    needed -= 1
+                    allocated = True
+                
+                # If own team pool is exhausted, try other pools
+                if not allocated:
                     if n_A_new_patients > 0:
                         physician.add_patient()
                         n_A_new_patients -= 1
                         n_total_new_patients -= 1
-                    else:
-                        break
-                elif physician.team == 'B':
-                    if n_B_new_patients > 0:
+                        needed -= 1
+                        allocated = True
+                    elif n_B_new_patients > 0:
                         physician.add_patient()
                         n_B_new_patients -= 1
                         n_total_new_patients -= 1
-                    else:
-                        break
-                elif physician.team == 'N':
-                    if n_N_new_patients > 0:
+                        needed -= 1
+                        allocated = True
+                    elif n_N_new_patients > 0:
                         physician.add_patient()
                         n_N_new_patients -= 1
                         n_total_new_patients -= 1
-                    else:
-                        break
-                else:
+                        needed -= 1
+                        allocated = True
+                
+                # If no pools have patients available, break (can't allocate more)
+                if not allocated:
                     break
 
     # Fourth, distribute remaining patients with pattern-based allocation
@@ -424,9 +470,14 @@ def allocate_patients(
     # Physicians with fewer patients get higher numbers
     
     # Get all non-new physicians for distribution
+    # CRITICAL: New physicians must be completely excluded from general distribution
+    # They only get patients to reach new_start_number (or 0 if already at/above it)
     non_new_physicians = [p for p in physicians if not p.is_new and can_take_patient(p)]
     
-    # Calculate current gains so far
+    # Double-check: Ensure no new physicians are included
+    non_new_physicians = [p for p in non_new_physicians if not p.is_new]
+    
+    # Calculate current gains so far (only for non-new physicians)
     current_gains = {p.name: p.total_patients - initial_counts[p.name] for p in non_new_physicians}
     
     # FIRST: Allocate Team N Pool to Team N physicians (priority)
@@ -564,6 +615,10 @@ def allocate_patients(
                 made_progress = False
                 
                 for physician in sorted_physicians:
+                    # CRITICAL: Skip new physicians - they should never be in sorted_physicians, but double-check
+                    if physician.is_new:
+                        continue
+                    
                     target_total_gain = target_total_gains.get(physician.name, 0)
                     # Always calculate current gain from actual physician state, not dictionary
                     actual_current_gain = physician.total_patients - initial_counts[physician.name]
@@ -663,6 +718,10 @@ def allocate_patients(
                 ), reverse=True)  # Reverse so those furthest below target come first
                 
                 for physician in sorted_by_need:
+                    # CRITICAL: Skip new physicians - they should never be in sorted_physicians, but double-check
+                    if physician.is_new:
+                        continue
+                    
                     if remaining_final <= 0:
                         break
                     target = target_total_gains.get(physician.name, 0)
@@ -697,6 +756,28 @@ def allocate_patients(
                         # This shouldn't happen, but if it does, we've found a bug
                         # In production, we might want to log this or handle it differently
                         pass  # For now, just note it - the checks above should prevent this
+    
+    # Final verification: Ensure new physicians who started at/above new_start_number have gained 0 patients
+    # This is a safety check to catch any bugs where new physicians incorrectly received patients
+    for physician in physicians:
+        if physician.is_new:
+            initial_total = initial_counts.get(physician.name, physician.total_patients)
+            current_total = physician.total_patients
+            gained = current_total - initial_total
+            
+            # If physician was already at or above new_start_number initially, they should have gained 0
+            if initial_total >= new_start_number:
+                if gained > 0:
+                    # BUG DETECTED: New physician at new_start_number got patients they shouldn't have
+                    # Reset them to their initial total (they should have gained 0)
+                    excess = gained
+                    for _ in range(excess):
+                        physician.remove_patient()
+                    # Force their total to be exactly what it should be (no gain)
+                    physician.set_total_patients(initial_total)
+                # If gained == 0, that's correct - they should get 0 patients
+            # If initial_total < new_start_number, they should have gained to reach new_start_number
+            # (This is handled in the "Third" phase above)
 
 # --- Streamlit App Begins Here ---
 st.set_page_config(page_title="Patient Allocator", page_icon="🩺", layout="wide")
@@ -1274,22 +1355,48 @@ if run:
         "gain_distribution": gain_distribution
     }
     
+    # Calculate team totals
+    team_a_total = sum(p.total_patients for p in working_physicians if p.team == 'A')
+    team_b_total = sum(p.total_patients for p in working_physicians if p.team == 'B')
+    team_n_total = sum(p.total_patients for p in working_physicians if p.team == 'N')
+    total_traded = sum(p.traded_patients for p in working_physicians)
+    
+    # Calculate total census: Team A + Team B + Team N + Total Traded patients
+    total_census = team_a_total + team_b_total + team_n_total + total_traded
+    
+    # Calculate team gains
+    team_a_gained = sum(p.total_patients - initial_counts[p.name] for p in working_physicians if p.team == 'A')
+    team_b_gained = sum(p.total_patients - initial_counts[p.name] for p in working_physicians if p.team == 'B')
+    team_n_gained = sum(p.total_patients - initial_counts[p.name] for p in working_physicians if p.team == 'N')
+    
+    # Calculate total gained: Team A + Team B + Team N + Total Traded patients
+    total_gained = team_a_gained + team_b_gained + team_n_gained + total_traded
+    
     st.session_state["allocation_summary"] = {
-        "team_a_total": sum(p.total_patients for p in working_physicians if p.team == 'A'),
-        "team_b_total": sum(p.total_patients for p in working_physicians if p.team == 'B'),
-        "team_a_gained": sum(p.total_patients - initial_counts[p.name] for p in working_physicians if p.team == 'A'),
-        "team_b_gained": sum(p.total_patients - initial_counts[p.name] for p in working_physicians if p.team == 'B'),
+        "team_a_total": team_a_total,
+        "team_b_total": team_b_total,
+        "team_n_total": team_n_total,
+        "team_a_gained": team_a_gained,
+        "team_b_gained": team_b_gained,
+        "team_n_gained": team_n_gained,
         "team_a_stepdown_gained": sum(p.step_down_patients - initial_step_down_counts[p.name] for p in working_physicians if p.team == 'A'),
         "team_b_stepdown_gained": sum(p.step_down_patients - initial_step_down_counts[p.name] for p in working_physicians if p.team == 'B'),
         "team_a_traded": sum(p.traded_patients for p in working_physicians if p.team == 'A'),
         "team_b_traded": sum(p.traded_patients for p in working_physicians if p.team == 'B'),
-        "total_census": sum(p.total_patients for p in working_physicians),
-        "total_gained": sum(p.total_patients - initial_counts[p.name] for p in working_physicians),
+        "total_traded": total_traded,
+        "total_census": total_census,
+        "total_gained": total_gained,
     }
 
 # Display results if they exist in session state
 if "allocation_results" in st.session_state and st.session_state["allocation_results"] is not None:
     st.markdown("### :clipboard: Results")
+    
+    # Explain how Total Patients is calculated
+    st.info("ℹ️ **Total Patients Calculation:** Total Patients = Original Total Patients + Regular Patients Gained. "
+            "Step-down patients are tracked separately and do NOT count towards Total Patients. "
+            "**Total Census** = Team A + Team B + Team N + Total Traded patients. "
+            "**Total Patients Gained** = Team A Gained + Team B Gained + Team N Gained + Total Traded patients.")
     
     # Add sorting option
     sort_by_total = st.checkbox("Sort by Total Patients (Lowest to Highest)", value=False, key="sort_results")
@@ -1309,16 +1416,33 @@ if "allocation_results" in st.session_state and st.session_state["allocation_res
             na_position='last'
         ).reset_index(drop=True)
     
-    # Style the DataFrame to highlight and bold "Gained StepDown" and "Gained + Traded" columns
-    def highlight_columns(series):
-        """Highlight and bold specific columns"""
-        if series.name in ["Gained StepDown", "Gained + Traded"]:
-            return ['background-color: #fff3cd; font-weight: bold'] * len(series)
-        return [''] * len(series)
+    # Make the results editable using st.data_editor
+    edited_results = st.data_editor(
+        display_df,
+        column_config={
+            "Physician Name": st.column_config.TextColumn("Physician Name", disabled=True),
+            "Team": st.column_config.TextColumn("Team", disabled=True),
+            "New Physician": st.column_config.CheckboxColumn("New Physician", disabled=True),
+            "Buffer": st.column_config.CheckboxColumn("Buffer", disabled=True),
+            "Original Total Patients": st.column_config.NumberColumn("Original Total Patients", min_value=0, step=1, format="%d", disabled=True),
+            "Total Patients": st.column_config.NumberColumn("Total Patients", min_value=0, step=1, format="%d"),
+            "Original StepDown": st.column_config.NumberColumn("Original StepDown", min_value=0, step=1, format="%d", disabled=True),
+            "StepDown": st.column_config.NumberColumn("StepDown", min_value=0, step=1, format="%d"),
+            "Out of floor": st.column_config.NumberColumn("Out of floor", min_value=0, step=1, format="%d"),
+            "Traded": st.column_config.NumberColumn("Traded", min_value=0, step=1, format="%d"),
+            "Gained": st.column_config.NumberColumn("Gained", min_value=0, step=1, format="%d", disabled=True),
+            "Gained StepDown": st.column_config.NumberColumn("Gained StepDown", min_value=0, step=1, format="%d", disabled=True),
+            "Gained + Traded": st.column_config.NumberColumn("Gained + Traded", min_value=0, step=1, format="%d", disabled=True),
+        },
+        hide_index=True,
+        use_container_width=True,
+        key="results_editor",
+        num_rows="fixed"
+    )
     
-    # Apply styling
-    styled_df = display_df.style.apply(highlight_columns, axis=0)
-    st.dataframe(styled_df, hide_index=True, use_container_width=True)
+    # Update session state with edited results
+    if not edited_results.equals(display_df):
+        st.session_state["allocation_results"] = edited_results.copy()
     
     # Calculate and display total gained patients and distribution
     if "allocation_results" in st.session_state and st.session_state["allocation_results"] is not None:
@@ -1394,8 +1518,14 @@ if "allocation_results" in st.session_state and st.session_state["allocation_res
         col3, col4 = st.columns(2)
         with col3:
             st.metric("Total Census", summary["total_census"])
+            # Show breakdown of total census calculation
+            st.caption(f"Team A ({summary['team_a_total']}) + Team B ({summary['team_b_total']}) + "
+                      f"Team N ({summary.get('team_n_total', 0)}) + Total Traded ({summary.get('total_traded', 0)}) = {summary['total_census']}")
         with col4:
             st.metric("Total Patients Gained from Yesterday", summary["total_gained"])
+            # Show breakdown of total gained calculation
+            st.caption(f"Team A Gained ({summary['team_a_gained']}) + Team B Gained ({summary['team_b_gained']}) + "
+                      f"Team N Gained ({summary.get('team_n_gained', 0)}) + Total Traded ({summary.get('total_traded', 0)}) = {summary['total_gained']}")
         
         # Trade information
         st.markdown("---")
@@ -1435,6 +1565,14 @@ st.markdown(
     .stDataFrame table {font-size: 1.08em;}
     .stButton>button {height: 2.7em; font-size:1.13em}
     .st-emotion-cache-ocqkz7 {background-color: #f6fbff}
+    /* Highlight and bold Gained StepDown and Gained + Traded columns */
+    div[data-testid="stDataEditor"] table th:has-text("Gained StepDown"),
+    div[data-testid="stDataEditor"] table th:has-text("Gained + Traded"),
+    div[data-testid="stDataEditor"] table td:nth-child(12),
+    div[data-testid="stDataEditor"] table td:nth-child(13) {
+        background-color: #fff3cd !important;
+        font-weight: bold !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
