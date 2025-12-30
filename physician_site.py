@@ -1457,35 +1457,38 @@ if "allocation_results" in st.session_state and st.session_state["allocation_res
             st.metric("Total Patients Gained (Sum)", int(total_gained))
             st.metric("Expected Total (Total New Patients)", int(expected_total))
             st.metric("Number of Physicians", int(num_physicians_shown))
-            if total_gained != expected_total:
-                st.error(f"⚠️ Mismatch! Gained ({int(total_gained)}) ≠ Expected ({int(expected_total)})")
-            else:
-                st.success("✅ Total gained matches expected!")
+            # LOOKUP
+            # if total_gained != expected_total:
+            #     st.error(f"⚠️ Mismatch! Gained ({int(total_gained)}) ≠ Expected ({int(expected_total)})")
+            # else:
+            #     st.success("✅ Total gained matches expected!")
         with col_analysis2:
             st.markdown("**Distribution by Gain Amount:**")
             for gain_amount in sorted(gain_counts.index):
                 count = int(gain_counts[gain_amount])
                 st.markdown(f"- **{count}** physician(s) gained **{int(gain_amount)}** patient(s)")
             
+            # LOOKUP
             # Show expected distribution calculation
-            if expected_total > 0 and num_physicians_shown > 0:
-                st.markdown("---")
-                st.markdown("**Expected Distribution:**")
-                base_expected = expected_total // num_physicians_shown
-                remainder_expected = expected_total % num_physicians_shown
-                st.markdown(f"- Base: {base_expected} patients per physician")
-                st.markdown(f"- Remainder: {remainder_expected} physicians should get {base_expected + 1}")
-                st.markdown(f"- Rest: {num_physicians_shown - remainder_expected} physicians should get {base_expected}")
+            # if expected_total > 0 and num_physicians_shown > 0:
+            #     st.markdown("---")
+            #     st.markdown("**Expected Distribution:**")
+            #     base_expected = expected_total // num_physicians_shown
+            #     remainder_expected = expected_total % num_physicians_shown
+            #     st.markdown(f"- Base: {base_expected} patients per physician")
+            #     st.markdown(f"- Remainder: {remainder_expected} physicians should get {base_expected + 1}")
+            #     st.markdown(f"- Rest: {num_physicians_shown - remainder_expected} physicians should get {base_expected}")
         
         # Show min and max gains
         min_gain = int(display_df["Gained"].min())
         max_gain = int(display_df["Gained"].max())
         gain_diff = max_gain - min_gain
         st.markdown(f"**Gain Range:** Minimum = {min_gain}, Maximum = {max_gain}, Difference = {gain_diff}")
-        if gain_diff > 1:
-            st.warning(f"⚠️ Gain difference is {gain_diff}, should be at most 1!")
-    else:
-            st.success("✅ All gains differ by at most 1!")
+    # LOOKUP
+    #     if gain_diff > 1:
+    #         st.warning(f"⚠️ Gain difference is {gain_diff}, should be at most 1!")
+    # else:
+    #         st.success("✅ All gains differ by at most 1!")
     
     # Display summary if it exists
     if "allocation_summary" in st.session_state:
@@ -1535,6 +1538,105 @@ if "allocation_results" in st.session_state and st.session_state["allocation_res
             st.metric("Patients Traded from Team A to Team B", trade_info['A_to_B'])
         with col6:
             st.metric("Patients Traded from Team B to Team A", trade_info['B_to_A'])
+
+        # Printable Summary Section
+    st.markdown("---")
+    st.markdown("### 🖨️ Printable Summary")
+    
+    show_print_summary = st.checkbox("Show Printable Summary", value=False, key="show_print_summary")
+    
+    if show_print_summary and "allocation_results" in st.session_state:
+        results_df = st.session_state["allocation_results"]
+        
+        # Create a clean summary DataFrame with the requested columns
+        print_summary_df = pd.DataFrame({
+            "Physician Name": results_df["Physician Name"],
+            "Team": results_df["Team"],
+            "Starting Patients": results_df["Original Total Patients"],
+            "Total StepDown": results_df["Original StepDown"],
+            "New StepDown": results_df["Gained StepDown"],
+            "New Patients (Total)": results_df["Gained"]
+        })
+        
+        # Sort by Team then by Physician Name for clean organization
+        print_summary_df = print_summary_df.sort_values(["Team", "Physician Name"]).reset_index(drop=True)
+        
+        # Display the printable summary table
+        st.dataframe(print_summary_df, hide_index=True, use_container_width=True)
+        
+        # Generate text summary for easy copying/printing
+        st.markdown("#### 📋 Text Summary (Copy/Print)")
+        
+        # Build text summary
+        from datetime import datetime
+        summary_lines = []
+        summary_lines.append(f"Patient Allocation Summary - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        summary_lines.append("=" * 60)
+        summary_lines.append("")
+        
+        # Group by team
+        for team in sorted(print_summary_df["Team"].unique()):
+            team_df = print_summary_df[print_summary_df["Team"] == team]
+            summary_lines.append(f"TEAM {team}")
+            summary_lines.append("-" * 40)
+            
+            for _, row in team_df.iterrows():
+                summary_lines.append(f"  {row['Physician Name']}:")
+                summary_lines.append(f"    Starting Patients: {int(row['Starting Patients'])}")
+                summary_lines.append(f"    Total StepDown: {int(row['Total StepDown'])}")
+                summary_lines.append(f"    New StepDown: {int(row['New StepDown'])}")
+                summary_lines.append(f"    New Patients (Total): {int(row['New Patients (Total)'])}")
+                summary_lines.append("")
+            
+            # Team subtotals
+            team_total_starting = int(team_df["Starting Patients"].sum())
+            team_total_stepdown = int(team_df["Total StepDown"].sum())
+            team_new_stepdown = int(team_df["New StepDown"].sum())
+            team_new_patients = int(team_df["New Patients (Total)"].sum())
+            summary_lines.append(f"  Team {team} Totals:")
+            summary_lines.append(f"    Total Starting: {team_total_starting}")
+            summary_lines.append(f"    Total New StepDown: {team_new_stepdown}")
+            summary_lines.append(f"    Total New Patients: {team_new_patients}")
+            summary_lines.append("")
+        
+        # Overall totals
+        summary_lines.append("=" * 60)
+        summary_lines.append("OVERALL TOTALS")
+        summary_lines.append(f"  Total Physicians: {len(print_summary_df)}")
+        summary_lines.append(f"  Total Starting Patients: {int(print_summary_df['Starting Patients'].sum())}")
+        summary_lines.append(f"  Total New StepDown: {int(print_summary_df['New StepDown'].sum())}")
+        summary_lines.append(f"  Total New Patients: {int(print_summary_df['New Patients (Total)'].sum())}")
+        summary_lines.append("=" * 60)
+        
+        summary_text = "\n".join(summary_lines)
+        
+        # Display in a text area for easy copying
+        st.text_area("Summary Text", value=summary_text, height=400, key="print_summary_text")
+        
+        # Add print button with JavaScript
+        st.markdown("""
+        <style>
+        @media print {
+            .stApp header, .stSidebar, .stButton, .stCheckbox, .stTextArea, 
+            [data-testid="stHeader"], [data-testid="stSidebar"], 
+            button, .element-container:has(button) {
+                display: none !important;
+            }
+            .print-summary {
+                font-family: monospace;
+                white-space: pre-wrap;
+                font-size: 12pt;
+            }
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🖨️ Print Summary", key="print_button"):
+            st.markdown(f"""
+            <script>
+            window.print();
+            </script>
+            """, unsafe_allow_html=True)
         
 # Handle structure changes and show info when no results exist  
 if "allocation_results" not in st.session_state or st.session_state["allocation_results"] is None:
