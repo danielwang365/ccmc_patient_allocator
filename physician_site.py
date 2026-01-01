@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import os
+import json
 from datetime import datetime
 
 # Files for persistent storage
@@ -304,93 +305,188 @@ def allocate_patients(
         # DO NOT check total patients for step-down allocation
         return gained_stepdown < 1
     
-    # ========== NEW ALLOCATION LOGIC ==========
-    # Step 1: Calculate total patients to distribute
-    # Total = Team A Pool + Team B Pool + Step Down (trades added separately)
-    total_to_distribute = n_A_new_patients + n_B_new_patients + n_step_down_patients
+    # Check if it's Wednesday
+    current_date = datetime.now()
+    is_wednesday = current_date.strftime("%A") == "Wednesday"
     
     print(f"\n=== ALLOCATION DEBUG ===")
-    print(f"Team A Pool: {n_A_new_patients}")
-    print(f"Team B Pool: {n_B_new_patients}")
-    print(f"Step Down: {n_step_down_patients}")
-    print(f"Total to distribute: {total_to_distribute}")
+    print(f"Today is: {current_date.strftime('%A, %B %d, %Y')}")
+    print(f"Is Wednesday: {is_wednesday}")
     
-    # Step 2: Get all working physicians and sort by total patients (low to high)
-    all_working = [p for p in physicians if p.is_working]
-    all_working.sort(key=lambda x: x.total_patients)
-    
-    print(f"All working physicians (sorted by total, low to high):")
-    for p in all_working:
-        print(f"  {p.name}: total={p.total_patients}, is_new={p.is_new}")
-    
-    remaining = total_to_distribute
-    
-    # Step 3: Allocate to new physicians until they reach new_start_number
-    # Do NOT include them in the general distribution afterward
-    new_physicians = [p for p in all_working if p.is_new]
-    print(f"\nStep 3: New physician allocation (new_start_number={new_start_number})")
-    for physician in new_physicians:
-        if physician.total_patients >= new_start_number:
-            print(f"  {physician.name}: already at {physician.total_patients}, skip")
-            continue
-        needed = new_start_number - physician.total_patients
-        to_give = min(needed, remaining)
-        for _ in range(to_give):
-            physician.add_patient()
-            remaining -= 1
-        print(f"  {physician.name}: gave {to_give}, now at {physician.total_patients}")
-    
-    # Step 4: Get non-new physicians for general distribution
-    non_new = [p for p in all_working if not p.is_new]
-    num_non_new = len(non_new)
-    
-    print(f"\nStep 4: General distribution (round-robin)")
-    print(f"Non-new physicians: {num_non_new}")
-    print(f"Remaining patients: {remaining}")
-    
-    if remaining > 0 and num_non_new > 0:
-        round_num = 0
+    # ========== WEDNESDAY ALLOCATION LOGIC ==========
+    if is_wednesday:
+        # Wednesday: Simple round-robin distribution
+        # GOAL: Treat all physicians as starting at 0, distribute total patients equally
+        # IMPORTANT: Wednesday uses COMPLETELY DIFFERENT logic
+        # - NO new_start_number constraint
+        # - NO minimum_patients constraint
+        # - Only maximum_patients constraint applies (via can_take_patient)
         
-        # Round-robin: while remaining >= num_non_new, give +1 to ALL non-new physicians
-        while remaining >= num_non_new:
-            round_num += 1
-            print(f"  Round {round_num}: giving +1 to all {num_non_new} physicians")
-            for physician in non_new:
-                if can_take_patient(physician):
-                    physician.add_patient()
-                    remaining -= 1
+        print(f"\n=== WEDNESDAY ALLOCATION ===")
+        print(f"Team A Pool: {n_A_new_patients}")
+        print(f"Team B Pool: {n_B_new_patients}")
+        print(f"Team N Pool: {n_N_new_patients}")
+        print(f"Step Down: {n_step_down_patients}")
         
-        print(f"  After full rounds: remaining={remaining}")
+        # Get all working physicians
+        all_working = [p for p in physicians if p.is_working]
+        num_working = len(all_working)
         
-        # Now remaining < num_non_new
-        # First, give to physicians below minimum
-        if remaining > 0:
-            below_min = [p for p in non_new if p.total_patients < minimum_patients and can_take_patient(p)]
-            below_min.sort(key=lambda x: x.total_patients)  # Lowest first
+        if num_working > 0:
+            # Step 1: Calculate total_all_patients = current_total + new_regular + stepdown
+            total_current_patients = sum(p.total_patients for p in all_working)
+            regular_patients = n_A_new_patients + n_B_new_patients + n_N_new_patients
+            total_all_patients = total_current_patients + regular_patients + n_step_down_patients
             
-            print(f"  Physicians below minimum ({minimum_patients}): {len(below_min)}")
-            for physician in below_min:
-                if remaining <= 0:
+            print(f"Total current patients: {total_current_patients}")
+            print(f"Regular patients (A+B+N): {regular_patients}")
+            print(f"Step Down patients: {n_step_down_patients}")
+            print(f"Total all patients: {total_all_patients}")
+            print(f"Number of working physicians: {num_working}")
+            
+            # Step 2: Reset all physicians to 0 (as if they all started with no patients)
+            for physician in all_working:
+                physician.set_total_patients(0)
+            
+            print(f"\nReset all physicians to 0 total patients")
+            
+            # Step 3: Separate into non-new and new physicians for priority
+            non_new_physicians = [p for p in all_working if not p.is_new]
+            new_physicians = [p for p in all_working if p.is_new]
+            
+            print(f"Non-new physicians: {len(non_new_physicians)}, New physicians: {len(new_physicians)}")
+            
+            # Step 4: Simple round-robin distribution
+            # Give +1 to all physicians who can take a patient, repeat until out of patients
+            remaining_patients = total_all_patients
+            round_num = 0
+            
+            while remaining_patients > 0:
+                round_num += 1
+                patients_given_this_round = 0
+                
+                # Full round: give +1 to all physicians who can take a patient
+                # Priority: non-new first, then new
+                for physician in non_new_physicians + new_physicians:
+                    if remaining_patients <= 0:
+                        break
+                    if can_take_patient(physician):
+                        physician.add_patient()
+                        remaining_patients -= 1
+                        patients_given_this_round += 1
+                
+                # If we couldn't give any patients this round, break
+                if patients_given_this_round == 0:
+                    print(f"  Round {round_num}: No more patients can be given (remaining: {remaining_patients})")
                     break
+                else:
+                    if round_num <= 5 or round_num % 10 == 0:  # Log first 5 and every 10th
+                        print(f"  Round {round_num}: Gave +1 to {patients_given_this_round} physicians ({remaining_patients} remaining)")
+            
+            # Print final results
+            print(f"\nFinal allocation results:")
+            final_totals = [p.total_patients for p in all_working]
+            min_total = min(final_totals)
+            max_total = max(final_totals)
+            variance = max_total - min_total
+            
+            # Sort by Team (A, B, N) then by total patients
+            for physician in sorted(all_working, key=lambda x: (x.team, x.total_patients)):
+                print(f"  {physician.name} (Team {physician.team}): {physician.total_patients} (is_new={physician.is_new})")
+            
+            print(f"\nFinal variance: {variance} (min={min_total}, max={max_total}, should be <= 1)")
+            print(f"Remaining patients: {remaining_patients}")
+        
+        # Continue to step-down allocation (same as regular days) - will run after this block
+        print(f"\n=== END WEDNESDAY REGULAR ALLOCATION ===\n")
+    
+    # ========== REGULAR ALLOCATION LOGIC (Non-Wednesday) ==========
+    else:
+        # Step 1: Calculate total patients to distribute
+        # Total = Team A Pool + Team B Pool + Step Down (trades added separately)
+        total_to_distribute = n_A_new_patients + n_B_new_patients + n_step_down_patients
+        
+        print(f"Team A Pool: {n_A_new_patients}")
+        print(f"Team B Pool: {n_B_new_patients}")
+        print(f"Step Down: {n_step_down_patients}")
+        print(f"Total to distribute: {total_to_distribute}")
+        
+        # Step 2: Get all working physicians and sort by total patients (low to high)
+        all_working = [p for p in physicians if p.is_working]
+        all_working.sort(key=lambda x: x.total_patients)
+        
+        print(f"All working physicians (sorted by total, low to high):")
+        for p in all_working:
+            print(f"  {p.name}: total={p.total_patients}, is_new={p.is_new}")
+        
+        remaining = total_to_distribute
+        
+        # Step 3: Allocate to new physicians until they reach new_start_number
+        # Do NOT include them in the general distribution afterward
+        new_physicians = [p for p in all_working if p.is_new]
+        print(f"\nStep 3: New physician allocation (new_start_number={new_start_number})")
+        for physician in new_physicians:
+            if physician.total_patients >= new_start_number:
+                print(f"  {physician.name}: already at {physician.total_patients}, skip")
+                continue
+            needed = new_start_number - physician.total_patients
+            to_give = min(needed, remaining)
+            for _ in range(to_give):
                 physician.add_patient()
                 remaining -= 1
-                print(f"    {physician.name}: +1 (below min), now at {physician.total_patients}")
+            print(f"  {physician.name}: gave {to_give}, now at {physician.total_patients}")
         
-        # Then, give remaining to physicians with lowest totals
-        if remaining > 0:
-            non_new.sort(key=lambda x: x.total_patients)  # Re-sort by current totals
-            print(f"  Distributing final {remaining} patients to lowest totals:")
-            for physician in non_new:
-                if remaining <= 0:
-                    break
-                if can_take_patient(physician):
+        # Step 4: Get non-new physicians for general distribution
+        non_new = [p for p in all_working if not p.is_new]
+        num_non_new = len(non_new)
+        
+        print(f"\nStep 4: General distribution (round-robin)")
+        print(f"Non-new physicians: {num_non_new}")
+        print(f"Remaining patients: {remaining}")
+        
+        if remaining > 0 and num_non_new > 0:
+            round_num = 0
+            
+            # Round-robin: while remaining >= num_non_new, give +1 to ALL non-new physicians
+            while remaining >= num_non_new:
+                round_num += 1
+                print(f"  Round {round_num}: giving +1 to all {num_non_new} physicians")
+                for physician in non_new:
+                    if can_take_patient(physician):
+                        physician.add_patient()
+                        remaining -= 1
+            
+            print(f"  After full rounds: remaining={remaining}")
+            
+            # Now remaining < num_non_new
+            # First, give to physicians below minimum
+            if remaining > 0:
+                below_min = [p for p in non_new if p.total_patients < minimum_patients and can_take_patient(p)]
+                below_min.sort(key=lambda x: x.total_patients)  # Lowest first
+                
+                print(f"  Physicians below minimum ({minimum_patients}): {len(below_min)}")
+                for physician in below_min:
+                    if remaining <= 0:
+                        break
                     physician.add_patient()
                     remaining -= 1
-                    print(f"    {physician.name}: +1, now at {physician.total_patients}")
+                    print(f"    {physician.name}: +1 (below min), now at {physician.total_patients}")
+            
+            # Then, give remaining to physicians with lowest totals
+            if remaining > 0:
+                non_new.sort(key=lambda x: x.total_patients)  # Re-sort by current totals
+                print(f"  Distributing final {remaining} patients to lowest totals:")
+                for physician in non_new:
+                    if remaining <= 0:
+                        break
+                    if can_take_patient(physician):
+                        physician.add_patient()
+                        remaining -= 1
+                        print(f"    {physician.name}: +1, now at {physician.total_patients}")
+            
+            print(f"After distribution: remaining={remaining}")
         
-        print(f"After distribution: remaining={remaining}")
-    
-    print(f"=== END ALLOCATION DEBUG ===\n")
+        print(f"=== END REGULAR ALLOCATION DEBUG ===\n")
     
     # ========== STEP-DOWN ALLOCATION ==========
     # Step 1: Calculate "Gained + Traded" for each team (after regular allocation)
@@ -467,29 +563,150 @@ def allocate_patients(
     
     # Final verification: Ensure new physicians who started at/above new_start_number have gained 0 patients
     # This is a safety check to catch any bugs where new physicians incorrectly received patients
-    for physician in physicians:
-        if physician.is_new:
-            initial_total = initial_counts.get(physician.name, physician.total_patients)
-            current_total = physician.total_patients
-            gained = current_total - initial_total
+    # SKIP THIS VERIFICATION ON WEDNESDAY - Wednesday doesn't use new_start_number
+    if not is_wednesday:
+        for physician in physicians:
+            if physician.is_new:
+                initial_total = initial_counts.get(physician.name, physician.total_patients)
+                current_total = physician.total_patients
+                gained = current_total - initial_total
+                
+                # If physician was already at or above new_start_number initially, they should have gained 0
+                if initial_total >= new_start_number:
+                    if gained > 0:
+                        # BUG DETECTED: New physician at new_start_number got patients they shouldn't have
+                        # Reset them to their initial total (they should have gained 0)
+                        excess = gained
+                        for _ in range(excess):
+                            physician.remove_patient()
+                        # Force their total to be exactly what it should be (no gain)
+                        physician.set_total_patients(initial_total)
+                    # If gained == 0, that's correct - they should get 0 patients
+                # If initial_total < new_start_number, they should have gained to reach new_start_number
+                # (This is handled in the "Third" phase above)
+        
+        # Check if any physicians are below minimum_patients and redistribute if needed
+        print(f"\n=== MINIMUM PATIENTS CHECK ===")
+        all_working = [p for p in physicians if p.is_working]
+        below_minimum = [p for p in all_working if p.total_patients < minimum_patients]
+        
+        if below_minimum:
+            print(f"Found {len(below_minimum)} physicians below minimum ({minimum_patients}):")
+            for p in below_minimum:
+                print(f"  {p.name} (Team {p.team}): {p.total_patients} patients")
             
-            # If physician was already at or above new_start_number initially, they should have gained 0
-            if initial_total >= new_start_number:
-                if gained > 0:
-                    # BUG DETECTED: New physician at new_start_number got patients they shouldn't have
-                    # Reset them to their initial total (they should have gained 0)
-                    excess = gained
-                    for _ in range(excess):
+            # Calculate total shortfall
+            total_shortfall = sum(minimum_patients - p.total_patients for p in below_minimum)
+            print(f"Total shortfall: {total_shortfall} patients")
+            
+            # Find non-new physicians who gained the most patients (sorted by gained descending)
+            # Exclude physicians who are at or below minimum (they can't afford to lose patients)
+            non_new_working = [p for p in all_working if not p.is_new]
+            physicians_with_gains = []
+            for p in non_new_working:
+                # Only consider physicians who are above minimum (can afford to lose one)
+                if p.total_patients > minimum_patients:
+                    gained = p.total_patients - initial_counts.get(p.name, p.total_patients)
+                    if gained > 0:
+                        physicians_with_gains.append((p, gained))
+            
+            # Sort by gained (highest first)
+            physicians_with_gains.sort(key=lambda x: x[1], reverse=True)
+            
+            print(f"Non-new physicians with gains above minimum (sorted by highest gained):")
+            for p, gained in physicians_with_gains[:10]:  # Show top 10
+                print(f"  {p.name} (Team {p.team}): gained {gained}, current total={p.total_patients}")
+            
+            # Iteratively redistribute until all physicians are at or above minimum
+            # or until we can't find any more sources
+            iteration = 0
+            max_iterations = 100  # Safety limit to prevent infinite loops
+            
+            while total_shortfall > 0 and iteration < max_iterations:
+                iteration += 1
+                print(f"\n  Redistribution iteration {iteration}:")
+                
+                # Recalculate below_minimum (in case it changed)
+                below_minimum = [p for p in all_working if p.total_patients < minimum_patients]
+                if not below_minimum:
+                    print("    All physicians now at or above minimum")
+                    break
+                
+                # Recalculate total shortfall
+                total_shortfall = sum(minimum_patients - p.total_patients for p in below_minimum)
+                print(f"    Total shortfall: {total_shortfall} patients")
+                
+                # Recalculate physicians_with_gains (exclude those now at or below minimum)
+                physicians_with_gains = []
+                for p in non_new_working:
+                    if p.total_patients > minimum_patients:
+                        gained = p.total_patients - initial_counts.get(p.name, p.total_patients)
+                        if gained > 0:
+                            physicians_with_gains.append((p, gained))
+                
+                # Sort by gained (highest first)
+                physicians_with_gains.sort(key=lambda x: x[1], reverse=True)
+                
+                if not physicians_with_gains:
+                    print("    No more physicians available to take patients from")
+                    break
+                
+                # Take no more than one patient from each physician, starting with highest gained
+                patients_removed_this_iteration = 0
+                for physician, gained in physicians_with_gains:
+                    if total_shortfall <= 0:
+                        break
+                    # Double-check they're still above minimum before removing
+                    if physician.total_patients > minimum_patients:
                         physician.remove_patient()
-                    # Force their total to be exactly what it should be (no gain)
-                    physician.set_total_patients(initial_total)
-                # If gained == 0, that's correct - they should get 0 patients
-            # If initial_total < new_start_number, they should have gained to reach new_start_number
-            # (This is handled in the "Third" phase above)
+                        patients_removed_this_iteration += 1
+                        total_shortfall -= 1
+                        print(f"    Removed 1 patient from {physician.name} (Team {physician.team}), now at {physician.total_patients}")
+                
+                # Redistribute the removed patients to physicians below minimum
+                if patients_removed_this_iteration > 0:
+                    print(f"    Redistributing {patients_removed_this_iteration} patients to physicians below minimum:")
+                    below_minimum_sorted = sorted(below_minimum, key=lambda x: x.total_patients)  # Lowest first
+                    for physician in below_minimum_sorted:
+                        if patients_removed_this_iteration <= 0:
+                            break
+                        if physician.total_patients < minimum_patients and can_take_patient(physician):
+                            physician.add_patient()
+                            patients_removed_this_iteration -= 1
+                            print(f"      Added 1 patient to {physician.name} (Team {physician.team}), now at {physician.total_patients}")
+                else:
+                    print("    No patients could be removed this iteration")
+                    break
+            
+            # Final check
+            below_minimum_final = [p for p in all_working if p.total_patients < minimum_patients]
+            if below_minimum_final:
+                print(f"\n  WARNING: {len(below_minimum_final)} physicians still below minimum after redistribution:")
+                for p in below_minimum_final:
+                    print(f"    {p.name} (Team {p.team}): {p.total_patients} patients")
+            else:
+                print(f"\n  SUCCESS: All physicians are now at or above minimum ({minimum_patients})")
+        else:
+            print(f"All physicians are at or above minimum ({minimum_patients})")
+        
+        print(f"=== END MINIMUM PATIENTS CHECK ===\n")
 
 # --- Streamlit App Begins Here ---
 st.set_page_config(page_title="Patient Allocator", page_icon="🩺", layout="wide")
 st.title("🩺 Physician Patient Allocation")
+
+# Check current day of the week
+current_date = datetime.now()
+day_of_week = current_date.strftime("%A")
+is_wednesday = day_of_week == "Wednesday"
+date_str = current_date.strftime("%B %d, %Y")
+
+# Display day of week prominently
+if is_wednesday:
+    st.success(f"📅 **Today is {day_of_week}, {date_str}**")
+else:
+    st.info(f"📅 **Today is {day_of_week}, {date_str}**")
+
 st.write("Use the sidebar to set patient pools and parameters. Edit physician information in the table below, then click **Run Allocation** to distribute patients according to the logic.")
 
 # Load default parameters if available
@@ -1577,6 +1794,8 @@ if "allocation_results" in st.session_state and st.session_state["allocation_res
             if "allocation_results" in st.session_state and st.session_state["allocation_results"] is not None:
                 print_display_df = st.session_state["allocation_results"].copy()
                 print_highlight_df = print_display_df[["Physician Name", "Team", "Gained + Traded", "Gained StepDown"]].copy()
+                # Sort by Team (A, B, N) then by Physician Name
+                print_highlight_df = print_highlight_df.sort_values(by=["Team", "Physician Name"], ascending=[True, True]).reset_index(drop=True)
                 print_total_gained_regular = print_display_df["Gained"].sum()
                 print_total_gained_stepdown = print_display_df["Gained StepDown"].sum()
                 print_total_gained = print_total_gained_regular
@@ -1822,7 +2041,7 @@ if "allocation_results" in st.session_state and st.session_state["allocation_res
                             font-weight: bold;
                         }}
                         .printable-summary tr:nth-child(even) {{
-                            background-color: #f2f2f2;
+                               background-color: #f2f2f2;
                         }}
                         /* Make Key Metrics table columns tighter, especially last two columns (Gained + Traded and Gained StepDown) */
                         .printable-summary table.printable-table th:nth-last-child(1),
