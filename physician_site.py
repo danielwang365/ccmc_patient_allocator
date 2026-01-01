@@ -1410,6 +1410,18 @@ if "allocation_results" in st.session_state and st.session_state["allocation_res
     st.markdown("#### ⭐ Key Metrics (Highlighted)")
     highlight_df = display_df[["Physician Name", "Team", "Original Total Patients", "Gained + Traded", "Gained StepDown"]].copy()
     
+    # Add CSS to truncate "Original Total Patients" column width
+    st.markdown("""
+    <style>
+    div[data-testid="stDataFrame"] table th:nth-child(3),
+    div[data-testid="stDataFrame"] table td:nth-child(3) {
+        max-width: 80px !important;
+        min-width: 60px !important;
+        width: 70px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     def highlight_cols(x):
         return ['background-color: #fff3cd; font-weight: bold' if col in ['Gained StepDown', 'Gained + Traded'] else '' for col in x.index]
     
@@ -1920,10 +1932,24 @@ if "allocation_results" in st.session_state and st.session_state["allocation_res
                 width: auto;
                 min-width: 120px;
             }
-            .printable-summary table.printable-table th:nth-child(2),
-            .printable-summary table.printable-table td:nth-child(2) {
-                width: auto;
-                min-width: 60px;
+                        .printable-summary table.printable-table th:nth-child(2),
+                        .printable-summary table.printable-table td:nth-child(2) {
+                            width: auto;
+                            min-width: 60px;
+                        }
+                        /* Truncate Original Total Patients column (3rd column) */
+                        .printable-summary table.printable-table th:nth-child(3),
+                        .printable-summary table.printable-table td:nth-child(3) {
+                            max-width: 80px !important;
+                            min-width: 60px !important;
+                            width: 70px !important;
+                        }
+            /* Truncate Original Total Patients column (3rd column) */
+            .printable-summary table.printable-table th:nth-child(3),
+            .printable-summary table.printable-table td:nth-child(3) {
+                max-width: 80px !important;
+                min-width: 60px !important;
+                width: 70px !important;
             }
             .printable-summary th {
                 background-color: #4CAF50;
