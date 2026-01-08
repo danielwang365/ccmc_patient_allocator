@@ -980,6 +980,10 @@ if not current_table.empty:
         # Default: sort alphabetically by physician name
         current_table = current_table.sort_values("Physician Name").reset_index(drop=True)
 
+# Add blank column to the rightmost side
+if not current_table.empty:
+    current_table[""] = ""
+
 edited_phys = st.data_editor(
     current_table,
     use_container_width=True,
@@ -1014,6 +1018,7 @@ edited_phys = st.data_editor(
         "Gained": st.column_config.NumberColumn(
             "Gained", min_value=0, step=1, format="%d"
         ),
+        "": st.column_config.TextColumn("", disabled=True),  # Blank column
     },
     hide_index=True,
     key="physician_table_editor",
@@ -1026,8 +1031,12 @@ if run:
     # Update session state with latest edits when button is clicked
     # This is the only place we update session state from the data editor
     # The widget's key maintains state between renders
-    st.session_state["physician_table"] = edited_phys.copy()
-    save_data(edited_phys)  # Persist changes
+    # Remove blank column before saving
+    edited_phys_clean = edited_phys.copy()
+    if "" in edited_phys_clean.columns:
+        edited_phys_clean = edited_phys_clean.drop(columns=[""])
+    st.session_state["physician_table"] = edited_phys_clean
+    save_data(edited_phys_clean)  # Persist changes
     
     # Save current physicians as yesterday's for next time
     # Filter out NaN values and convert to strings
@@ -2025,12 +2034,20 @@ if "allocation_results" not in st.session_state or st.session_state["allocation_
     # Check if structure changed (rows/columns added/removed via data editor)
     # Only update session state for structure changes, not value changes
     # This prevents the double-entry bug while still persisting structural changes
-    if (current_table.shape != edited_phys.shape or 
-        list(current_table.columns) != list(edited_phys.columns)):
+    # Remove blank column before comparing and saving
+    edited_phys_clean = edited_phys.copy()
+    if "" in edited_phys_clean.columns:
+        edited_phys_clean = edited_phys_clean.drop(columns=[""])
+    current_table_clean = current_table.copy()
+    if "" in current_table_clean.columns:
+        current_table_clean = current_table_clean.drop(columns=[""])
+    
+    if (current_table_clean.shape != edited_phys_clean.shape or 
+        list(current_table_clean.columns) != list(edited_phys_clean.columns)):
         # Structure changed - update session state and rerun
         # This is necessary to persist row additions/deletions
-        st.session_state["physician_table"] = edited_phys.copy()
-        save_data(edited_phys)  # Persist changes
+        st.session_state["physician_table"] = edited_phys_clean
+        save_data(edited_phys_clean)  # Persist changes
         st.rerun()
     
     # For value changes, don't update session state here
