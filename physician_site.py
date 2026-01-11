@@ -744,55 +744,197 @@ with st.expander("🏥 Select Working Doctors from Master List", expanded=True):
         yesterday_str = [str(name) for name in yesterday_physicians if name]
         st.markdown(f"**Yesterday's Physicians ({len(yesterday_str)}):** {', '.join(yesterday_str)}")
     
-    # Create checkboxes for each doctor in the master list
     st.markdown("**Select Today's Physicians:**")
+    st.markdown("<small>*Move doctors between Team A, B, or N boxes. Check the box next to their name to mark them as working.*</small>", unsafe_allow_html=True)
     
-    # Organize checkboxes in columns for better layout (column-wise, not row-wise)
-    # Each column should read alphabetically from top to bottom
-    num_cols = 3
-    cols = st.columns(num_cols)
+    # Add custom CSS for smaller font sizes and compact team selector
+    st.markdown("""
+    <style>
+    .compact-doctor-list {
+        font-size: 0.85em;
+        line-height: 1.2;
+    }
+    .compact-doctor-name {
+        font-size: 0.9em;
+        font-weight: 500;
+        margin: 0;
+        padding: 2px 0;
+    }
+    .compact-team-header {
+        font-size: 1.1em;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    /* Make selectbox smaller */
+    div[data-baseweb="select"] {
+        font-size: 0.75em;
+    }
+    /* Compact button styling */
+    .stButton > button {
+        font-size: 0.7em;
+        height: 1.5em;
+        padding: 0.1em 0.3em;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
-    # Calculate number of items per column (ceiling division)
-    items_per_col = (len(MASTER_PHYSICIAN_LIST) + num_cols - 1) // num_cols
+    # Organize doctors by their current team assignment
+    team_a_doctors = []
+    team_b_doctors = []
+    team_n_doctors = []
     
-    # Split the alphabetically sorted list into columns
-    # Column 0 gets first items_per_col items, Column 1 gets next items_per_col, etc.
-    column_lists = []
-    for col_idx in range(num_cols):
-        start_idx = col_idx * items_per_col
-        end_idx = min(start_idx + items_per_col, len(MASTER_PHYSICIAN_LIST))
-        column_lists.append(MASTER_PHYSICIAN_LIST[start_idx:end_idx])
+    for doctor_name in MASTER_PHYSICIAN_LIST:
+        current_team = st.session_state["master_team_assignments"].get(doctor_name, "A")
+        if current_team == "A":
+            team_a_doctors.append(doctor_name)
+        elif current_team == "B":
+            team_b_doctors.append(doctor_name)
+        else:  # Team N
+            team_n_doctors.append(doctor_name)
+    
+    # Sort each team's list alphabetically
+    team_a_doctors.sort()
+    team_b_doctors.sort()
+    team_n_doctors.sort()
+    
+    # Create two columns for Team A and Team B
+    team_a_col, team_b_col = st.columns(2)
     
     selected_doctors = []
-    # Display checkboxes column by column (top to bottom in each column)
-    for col_idx in range(num_cols):
-        with cols[col_idx]:
-            for doctor_name in column_lists[col_idx]:
-                # Create a container with checkbox and team selector side by side
-                checkbox_col, team_col = st.columns([3, 1])
+    
+    # Team A box (left side) - compact layout
+    with team_a_col:
+        st.markdown('<p class="compact-team-header">👥 Team A</p>', unsafe_allow_html=True)
+        with st.container():
+            if team_a_doctors:
+                # Use multiple columns for compact display
+                num_a_cols = min(2, len(team_a_doctors))
+                if num_a_cols > 0:
+                    a_cols = st.columns(num_a_cols)
+                    items_per_a_col = (len(team_a_doctors) + num_a_cols - 1) // num_a_cols
+                    
+                    for col_idx in range(num_a_cols):
+                        with a_cols[col_idx]:
+                            start_idx = col_idx * items_per_a_col
+                            end_idx = min(start_idx + items_per_a_col, len(team_a_doctors))
+                            for doctor_name in team_a_doctors[start_idx:end_idx]:
+                                # Row with checkbox, name, and small team selector
+                                checkbox_col, name_col, team_col = st.columns([0.5, 3, 1])
+                                
+                                with checkbox_col:
+                                    reset_counter = st.session_state.get("checkbox_reset_counter", 0)
+                                    is_checked = doctor_name in st.session_state["selected_physicians"]
+                                    checkbox_value = st.checkbox("", value=is_checked, key=f"doctor_checkbox_{doctor_name}_{reset_counter}")
+                                    if checkbox_value:
+                                        selected_doctors.append(doctor_name)
+                                
+                                with name_col:
+                                    st.markdown(f'<p class="compact-doctor-name">{doctor_name}</p>', unsafe_allow_html=True)
+                                
+                                with team_col:
+                                    # Small discrete team selector
+                                    current_team = st.session_state["master_team_assignments"].get(doctor_name, "A")
+                                    new_team = st.selectbox(
+                                        "",
+                                        options=["A", "B", "N"],
+                                        index=["A", "B", "N"].index(current_team) if current_team in ["A", "B", "N"] else 0,
+                                        key=f"team_select_{doctor_name}",
+                                        label_visibility="collapsed"
+                                    )
+                                    if new_team != current_team:
+                                        st.session_state["master_team_assignments"][doctor_name] = new_team
+                                        st.rerun()
+            else:
+                st.markdown("<small>No doctors assigned to Team A</small>", unsafe_allow_html=True)
+    
+    # Team B box (right side) - compact layout
+    with team_b_col:
+        st.markdown('<p class="compact-team-header">👥 Team B</p>', unsafe_allow_html=True)
+        with st.container():
+            if team_b_doctors:
+                # Use multiple columns for compact display
+                num_b_cols = min(2, len(team_b_doctors))
+                if num_b_cols > 0:
+                    b_cols = st.columns(num_b_cols)
+                    items_per_b_col = (len(team_b_doctors) + num_b_cols - 1) // num_b_cols
+                    
+                    for col_idx in range(num_b_cols):
+                        with b_cols[col_idx]:
+                            start_idx = col_idx * items_per_b_col
+                            end_idx = min(start_idx + items_per_b_col, len(team_b_doctors))
+                            for doctor_name in team_b_doctors[start_idx:end_idx]:
+                                # Row with checkbox, name, and small team selector
+                                checkbox_col, name_col, team_col = st.columns([0.5, 3, 1])
+                                
+                                with checkbox_col:
+                                    reset_counter = st.session_state.get("checkbox_reset_counter", 0)
+                                    is_checked = doctor_name in st.session_state["selected_physicians"]
+                                    checkbox_value = st.checkbox("", value=is_checked, key=f"doctor_checkbox_{doctor_name}_{reset_counter}")
+                                    if checkbox_value:
+                                        selected_doctors.append(doctor_name)
+                                
+                                with name_col:
+                                    st.markdown(f'<p class="compact-doctor-name">{doctor_name}</p>', unsafe_allow_html=True)
+                                
+                                with team_col:
+                                    # Small discrete team selector
+                                    current_team = st.session_state["master_team_assignments"].get(doctor_name, "B")
+                                    new_team = st.selectbox(
+                                        "",
+                                        options=["A", "B", "N"],
+                                        index=["A", "B", "N"].index(current_team) if current_team in ["A", "B", "N"] else 1,
+                                        key=f"team_select_{doctor_name}",
+                                        label_visibility="collapsed"
+                                    )
+                                    if new_team != current_team:
+                                        st.session_state["master_team_assignments"][doctor_name] = new_team
+                                        st.rerun()
+            else:
+                st.markdown("<small>No doctors assigned to Team B</small>", unsafe_allow_html=True)
+    
+    # Team N box (smaller, below Team A and B) - compact layout
+    st.markdown('<p class="compact-team-header">👥 Team N</p>', unsafe_allow_html=True)
+    with st.container():
+        if team_n_doctors:
+            # Use more columns for Team N to make it more compact
+            num_n_cols = min(6, len(team_n_doctors))
+            if num_n_cols > 0:
+                n_cols = st.columns(num_n_cols)
+                items_per_n_col = (len(team_n_doctors) + num_n_cols - 1) // num_n_cols
                 
-                with checkbox_col:
-                    # Check if this doctor was selected previously or is in yesterday's list
-                    # Use reset counter in key to force checkbox reset when "Uncheck All" is clicked
-                    reset_counter = st.session_state.get("checkbox_reset_counter", 0)
-                    is_checked = doctor_name in st.session_state["selected_physicians"]
-                    checkbox_value = st.checkbox(doctor_name, value=is_checked, key=f"doctor_checkbox_{doctor_name}_{reset_counter}")
-                    if checkbox_value:
-                        selected_doctors.append(doctor_name)
-                
-                with team_col:
-                    # Get current team assignment or default to "A"
-                    current_team = st.session_state["master_team_assignments"].get(doctor_name, "A")
-                    team_index = ["A", "B", "N"].index(current_team) if current_team in ["A", "B", "N"] else 0
-                    selected_team = st.selectbox(
-                        "Team",
-                        options=["A", "B", "N"],
-                        index=team_index,
-                        key=f"team_select_{doctor_name}",
-                        label_visibility="collapsed"
-                    )
-                    # Update session state with team assignment
-                    st.session_state["master_team_assignments"][doctor_name] = selected_team
+                for col_idx in range(num_n_cols):
+                    with n_cols[col_idx]:
+                        start_idx = col_idx * items_per_n_col
+                        end_idx = min(start_idx + items_per_n_col, len(team_n_doctors))
+                        for doctor_name in team_n_doctors[start_idx:end_idx]:
+                            # Row with checkbox, name, and small team selector
+                            checkbox_col, name_col, team_col = st.columns([0.5, 2.5, 1])
+                            
+                            with checkbox_col:
+                                reset_counter = st.session_state.get("checkbox_reset_counter", 0)
+                                is_checked = doctor_name in st.session_state["selected_physicians"]
+                                checkbox_value = st.checkbox("", value=is_checked, key=f"doctor_checkbox_{doctor_name}_{reset_counter}")
+                                if checkbox_value:
+                                    selected_doctors.append(doctor_name)
+                            
+                            with name_col:
+                                st.markdown(f'<p class="compact-doctor-name">{doctor_name}</p>', unsafe_allow_html=True)
+                            
+                            with team_col:
+                                # Small discrete team selector
+                                current_team = st.session_state["master_team_assignments"].get(doctor_name, "N")
+                                new_team = st.selectbox(
+                                    "",
+                                    options=["A", "B", "N"],
+                                    index=["A", "B", "N"].index(current_team) if current_team in ["A", "B", "N"] else 2,
+                                    key=f"team_select_{doctor_name}",
+                                    label_visibility="collapsed"
+                                )
+                                if new_team != current_team:
+                                    st.session_state["master_team_assignments"][doctor_name] = new_team
+                                    st.rerun()
+        else:
+            st.markdown("<small>No doctors assigned to Team N</small>", unsafe_allow_html=True)
     
     # Update session state with selected doctors
     st.session_state["selected_physicians"] = selected_doctors
@@ -962,13 +1104,18 @@ if not current_table.empty:
         cols.insert(0, "Yesterday")
     current_table = current_table[cols]
 
-# Add sorting option for the input table
-sort_input_table = st.checkbox("Sort by Total Patients (Lowest to Highest) for Team A & B", value=False, key="sort_input_table")
+# Initialize sort mode in session state if not exists
+if "physician_table_sort_mode" not in st.session_state:
+    st.session_state["physician_table_sort_mode"] = "none"  # "none", "alphabetical", "total_patients"
 
-# Apply sorting based on checkbox
-if not current_table.empty:
-    if sort_input_table:
-        # Sort by Team first, then by Total Patients (ascending) within each team
+# Track previous checkbox state to detect changes
+if "prev_sort_checkbox_state" not in st.session_state:
+    st.session_state["prev_sort_checkbox_state"] = (st.session_state["physician_table_sort_mode"] == "total_patients")
+
+# Apply initial sorting if sort mode is set (before creating data editor to avoid losing edits)
+if not current_table.empty and "physician_table_editor" not in st.session_state:
+    # This is the initial load - apply sorting if mode is set
+    if st.session_state["physician_table_sort_mode"] == "total_patients":
         current_table = current_table.copy()
         current_table["Total Patients"] = pd.to_numeric(current_table["Total Patients"], errors='coerce')
         current_table = current_table.sort_values(
@@ -976,14 +1123,14 @@ if not current_table.empty:
             ascending=[True, True], 
             na_position='last'
         ).reset_index(drop=True)
-    else:
-        # Default: sort alphabetically by physician name
+    elif st.session_state["physician_table_sort_mode"] == "alphabetical":
         current_table = current_table.sort_values("Physician Name").reset_index(drop=True)
 
-# Add blank column to the rightmost side
+# Add blank column to the rightmost side before creating data editor
 if not current_table.empty:
     current_table[""] = ""
 
+# Create data editor first to capture any unsaved edits
 edited_phys = st.data_editor(
     current_table,
     use_container_width=True,
@@ -1024,6 +1171,79 @@ edited_phys = st.data_editor(
     key="physician_table_editor",
     on_change=None,  # Don't use on_change to avoid conflicts
 )
+
+# Add sorting options for the input table (after data editor to capture edits)
+sort_col1, sort_col2 = st.columns(2)
+with sort_col1:
+    sort_input_table = st.checkbox("Sort by Total Patients (Lowest to Highest) for Team A & B", 
+                                    value=(st.session_state["physician_table_sort_mode"] == "total_patients"), 
+                                    key="sort_input_table")
+with sort_col2:
+    sort_alphabetical = st.button("🔤 Sort Alphabetically", key="sort_alphabetical_btn", use_container_width=True)
+
+# Check if sorting was requested - if so, save current edits first
+sort_requested = False
+if sort_alphabetical or (sort_input_table != st.session_state["prev_sort_checkbox_state"]):
+    sort_requested = True
+    # Save current edited data to session state before sorting
+    edited_phys_clean = edited_phys.copy()
+    if "" in edited_phys_clean.columns:
+        edited_phys_clean = edited_phys_clean.drop(columns=[""])
+    st.session_state["physician_table"] = edited_phys_clean
+    save_data(edited_phys_clean)
+    # Update current_table to use the saved edits
+    current_table = edited_phys_clean.copy()
+    # Re-add Yesterday column and blank column if needed
+    if not current_table.empty:
+        if "Yesterday" not in current_table.columns:
+            current_table["Yesterday"] = current_table["Physician Name"].apply(lambda x: x if x in yesterday_physicians else "")
+        cols = current_table.columns.tolist()
+        if "Yesterday" in cols:
+            cols.remove("Yesterday")
+            cols.insert(0, "Yesterday")
+        current_table = current_table[cols]
+
+# Update previous checkbox state
+st.session_state["prev_sort_checkbox_state"] = sort_input_table
+
+# Apply sorting based on user selection
+if not current_table.empty and sort_requested:
+    # Update sort mode based on button click
+    if sort_alphabetical:
+        st.session_state["physician_table_sort_mode"] = "alphabetical"
+    # Update sort mode based on checkbox state
+    elif sort_input_table:
+        st.session_state["physician_table_sort_mode"] = "total_patients"
+    elif st.session_state["physician_table_sort_mode"] == "total_patients":
+        # Checkbox was unchecked, switch to no sort mode
+        st.session_state["physician_table_sort_mode"] = "none"
+    
+    # Apply sorting based on current mode
+    if st.session_state["physician_table_sort_mode"] == "total_patients":
+        # Sort by Team first, then by Total Patients (ascending) within each team
+        current_table = current_table.copy()
+        current_table["Total Patients"] = pd.to_numeric(current_table["Total Patients"], errors='coerce')
+        current_table = current_table.sort_values(
+            by=["Team", "Total Patients"], 
+            ascending=[True, True], 
+            na_position='last'
+        ).reset_index(drop=True)
+    elif st.session_state["physician_table_sort_mode"] == "alphabetical":
+        # Sort alphabetically by physician name
+        current_table = current_table.sort_values("Physician Name").reset_index(drop=True)
+    
+    # Add blank column back
+    if not current_table.empty:
+        current_table[""] = ""
+    
+    # Update session state with sorted data
+    current_table_clean = current_table.copy()
+    if "" in current_table_clean.columns:
+        current_table_clean = current_table_clean.drop(columns=[""])
+    st.session_state["physician_table"] = current_table_clean
+    save_data(current_table_clean)
+    st.rerun()
+# If no sort requested, maintain current order (data editor already created with current_table)
 
 run = st.button("Run Allocation", use_container_width=True, type="primary")
 
@@ -1878,7 +2098,7 @@ if "allocation_results" in st.session_state and st.session_state["allocation_res
             # Overall census (condensed)
             print_html += "<h3>Overall Summary</h3>"
             print_html += f"<p><strong>Total Census:</strong> {summary['total_census']}</p>"
-            print_html += f"<p><strong>Total Patients Gained from Yesterday:</strong> {summary['total_gained']}</p>"
+            print_html += f"<p><strong>Total Gained + Traded:</strong> {summary['total_gained']}</p>"
             
             print_html += "</div>"
             
