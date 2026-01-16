@@ -1,61 +1,75 @@
 import streamlit as st
 import pandas as pd
-import os
 from datetime import datetime
 
-# Files for persistent storage
-DATA_FILE = "physician_data.csv"
-YESTERDAY_FILE = "yesterday_physicians.csv"
-SELECTED_FILE = "selected_physicians.csv"
-MASTER_LIST_FILE = "master_physician_list.csv"
-DEFAULT_PARAMS_FILE = "default_parameters.csv"
-DEFAULT_PHYSICIANS_FILE = "default_physicians.csv"
+# Database imports
+from database import (
+    get_db, init_database, get_data_version, increment_data_version,
+    Physician as PhysicianModel, MasterPhysician, UserSelection,
+    YesterdayPhysician, Parameter, DefaultPhysician, DataVersion
+)
+
+# Initialize database on startup
+init_database()
+
 
 def save_data(df):
-    """Saves the physician table to a CSV file."""
-    df.to_csv(DATA_FILE, index=False)
+    """Saves the physician table to the database."""
+    with get_db() as db:
+        # Clear existing physicians
+        db.query(PhysicianModel).delete()
+
+        # Insert all physicians from dataframe
+        for _, row in df.iterrows():
+            name = str(row.get("Physician Name", "")).strip()
+            if not name:
+                continue
+
+            physician = PhysicianModel(
+                name=name,
+                team=str(row.get("Team", "A")),
+                is_new=bool(row.get("New Physician", False)),
+                is_buffer=bool(row.get("Buffer", False)),
+                is_working=bool(row.get("Working", True)),
+                total_patients=int(row.get("Total Patients", 0)),
+                step_down_patients=int(row.get("StepDown", 0)),
+                transferred_patients=int(row.get("Transferred", 0)) if "Transferred" in row else 0,
+                traded_patients=int(row.get("Traded", 0)),
+                yesterday_name=str(row.get("Yesterday", "")) if pd.notna(row.get("Yesterday")) else ""
+            )
+            db.add(physician)
+
+        # Increment data version for multi-user sync
+        increment_data_version()
+
 
 def load_data(default_rows):
-    """Loads the physician table from a CSV file if it exists, otherwise returns default rows."""
-    if os.path.exists(DATA_FILE):
-        try:
-            df = pd.read_csv(DATA_FILE)
-            # Filter out rows with empty physician names
-            df = df.dropna(subset=["Physician Name"])
-            df = df[df["Physician Name"].str.strip() != ""]
-            # Ensure boolean columns are correctly typed
-            bool_cols = ["New Physician", "Buffer", "Working"]
-            for col in bool_cols:
-                if col in df.columns:
-                    df[col] = df[col].astype(bool)
-            # Add Yesterday column if missing
-            if "Yesterday" not in df.columns:
-                yesterday_physicians = load_yesterday_physicians()
-                # Pre-fill with physician name if they worked yesterday
-                df["Yesterday"] = df["Physician Name"].apply(lambda x: x if x in yesterday_physicians else "")
-            else:
-                # Convert to string if it's boolean (for backward compatibility)
-                if df["Yesterday"].dtype == bool:
-                    yesterday_physicians = load_yesterday_physicians()
-                    df["Yesterday"] = df["Physician Name"].apply(lambda x: x if x in yesterday_physicians else "")
-                else:
-                    df["Yesterday"] = df["Yesterday"].astype(str).replace("nan", "").replace("False", "").replace("True", "")
-            # Sort alphabetically by physician name by default
-            df = df.sort_values("Physician Name").reset_index(drop=True)
-            # Reorder columns to put Yesterday first
-            cols = df.columns.tolist()
-            if "Yesterday" in cols:
-                cols.remove("Yesterday")
-                cols.insert(0, "Yesterday")
-            df = df[cols]
-            return df
-        except Exception:
-            df = pd.DataFrame(default_rows)
-            # Add Yesterday column to default rows
-            if "Yesterday" not in df.columns:
-                yesterday_physicians = load_yesterday_physicians()
-                # Pre-fill with physician name if they worked yesterday
-                df["Yesterday"] = df["Physician Name"].apply(lambda x: x if x in yesterday_physicians else "")
+    """Loads the physician table from the database, or returns default rows if empty."""
+    with get_db() as db:
+        physicians = db.query(PhysicianModel).all()
+
+        if physicians:
+            yesterday_physicians = load_yesterday_physicians()
+            data = []
+            for p in physicians:
+                yesterday_val = p.yesterday_name if p.yesterday_name else ""
+                # If no yesterday_name stored, check if they worked yesterday
+                if not yesterday_val and p.name in yesterday_physicians:
+                    yesterday_val = p.name
+
+                data.append({
+                    "Yesterday": yesterday_val,
+                    "Physician Name": p.name,
+                    "Team": p.team,
+                    "New Physician": p.is_new,
+                    "Buffer": p.is_buffer,
+                    "Working": p.is_working,
+                    "Total Patients": p.total_patients,
+                    "StepDown": p.step_down_patients,
+                    "Traded": p.traded_patients
+                })
+
+            df = pd.DataFrame(data)
             # Sort alphabetically by physician name
             df = df.sort_values("Physician Name").reset_index(drop=True)
             # Reorder columns to put Yesterday first
@@ -65,11 +79,12 @@ def load_data(default_rows):
                 cols.insert(0, "Yesterday")
             df = df[cols]
             return df
+
+    # Return default rows if database is empty
     df = pd.DataFrame(default_rows)
     # Add Yesterday column to default rows
     if "Yesterday" not in df.columns:
         yesterday_physicians = load_yesterday_physicians()
-        # Pre-fill with physician name if they worked yesterday
         df["Yesterday"] = df["Physician Name"].apply(lambda x: x if x in yesterday_physicians else "")
     # Sort alphabetically by physician name
     df = df.sort_values("Physician Name").reset_index(drop=True)
@@ -81,105 +96,164 @@ def load_data(default_rows):
     df = df[cols]
     return df
 
+
 def save_yesterday_physicians(physician_names):
-    """Saves yesterday's physician names to a file."""
-    # Filter out NaN values and empty strings, convert to strings
-    filtered_names = [str(name).strip() for name in physician_names 
-                     if pd.notna(name) and str(name).strip()]
-    df = pd.DataFrame({"Physician Name": filtered_names})
-    df.to_csv(YESTERDAY_FILE, index=False)
+    """Saves yesterday's physician names to the database."""
+    with get_db() as db:
+        # Clear existing yesterday records
+        db.query(YesterdayPhysician).delete()
+
+        # Insert new records
+        for name in physician_names:
+            if pd.notna(name) and str(name).strip():
+                db.add(YesterdayPhysician(physician_name=str(name).strip()))
+
 
 def load_yesterday_physicians():
-    """Loads yesterday's physician names from a file."""
-    if os.path.exists(YESTERDAY_FILE):
-        try:
-            df = pd.read_csv(YESTERDAY_FILE)
-            # Filter out NaN values and convert to strings, then filter out empty strings
-            names = [str(name).strip() for name in df["Physician Name"].tolist() 
-                    if pd.notna(name) and str(name).strip()]
-            return names
-        except Exception:
-            return []
-    return []
+    """Loads yesterday's physician names from the database."""
+    with get_db() as db:
+        records = db.query(YesterdayPhysician).all()
+        return [r.physician_name for r in records if r.physician_name]
+
 
 def save_selected_physicians(physician_names):
-    """Saves selected physician names to a file."""
-    df = pd.DataFrame({"Physician Name": physician_names})
-    df.to_csv(SELECTED_FILE, index=False)
+    """Saves selected physician names to the database."""
+    with get_db() as db:
+        # Clear existing selections
+        db.query(UserSelection).delete()
+
+        # Insert new selections
+        for name in physician_names:
+            if name and str(name).strip():
+                db.add(UserSelection(physician_name=str(name).strip(), is_selected=True))
+
 
 def load_selected_physicians():
-    """Loads selected physician names from a file."""
-    if os.path.exists(SELECTED_FILE):
-        try:
-            df = pd.read_csv(SELECTED_FILE)
-            return df["Physician Name"].tolist()
-        except Exception:
-            return []
-    return []
+    """Loads selected physician names from the database."""
+    with get_db() as db:
+        records = db.query(UserSelection).filter(UserSelection.is_selected == True).all()
+        return [r.physician_name for r in records if r.physician_name]
+
 
 def save_master_list(physician_names):
-    """Saves the master physician list to a file."""
-    df = pd.DataFrame({"Physician Name": sorted(list(set(physician_names)))})
-    df.to_csv(MASTER_LIST_FILE, index=False)
+    """Saves the master physician list to the database."""
+    with get_db() as db:
+        existing = {p.name for p in db.query(MasterPhysician).all()}
+
+        for name in physician_names:
+            if name and str(name).strip() and name not in existing:
+                db.add(MasterPhysician(name=str(name).strip()))
+
 
 def load_master_list(default_list):
-    """Loads the master physician list from a file, or returns default if file doesn't exist."""
-    if os.path.exists(MASTER_LIST_FILE):
-        try:
-            df = pd.read_csv(MASTER_LIST_FILE)
-            # Filter out empty names
-            names = [name.strip() for name in df["Physician Name"].astype(str).tolist() if name.strip()]
+    """Loads the master physician list from the database, or returns default if empty."""
+    with get_db() as db:
+        records = db.query(MasterPhysician).all()
+        if records:
+            names = [r.name for r in records if r.name]
             if names:
                 return sorted(list(set(names)))
-        except Exception:
-            pass
-    # Return default list if file doesn't exist or error occurred
+
+    # Return default list and seed database if empty
+    with get_db() as db:
+        for name in default_list:
+            if not db.query(MasterPhysician).filter(MasterPhysician.name == name).first():
+                db.add(MasterPhysician(name=name))
+
     return sorted(list(set(default_list)))
 
+
 def save_default_parameters(params_dict):
-    """Saves default allocation parameters to a file."""
-    df = pd.DataFrame([params_dict])
-    df.to_csv(DEFAULT_PARAMS_FILE, index=False)
+    """Saves default allocation parameters to the database."""
+    with get_db() as db:
+        params = db.query(Parameter).filter(Parameter.name == 'default').first()
+
+        if params:
+            params.n_total_new_patients = params_dict.get("n_total_new_patients", 20)
+            params.n_A_new_patients = params_dict.get("n_A_new_patients", 10)
+            params.n_B_new_patients = params_dict.get("n_B_new_patients", 8)
+            params.n_N_new_patients = params_dict.get("n_N_new_patients", 2)
+            params.n_step_down_patients = params_dict.get("n_step_down_patients", 0)
+            params.minimum_patients = params_dict.get("minimum_patients", 10)
+            params.maximum_patients = params_dict.get("maximum_patients", 20)
+            params.new_start_number = params_dict.get("new_start_number", 5)
+        else:
+            db.add(Parameter(
+                name='default',
+                n_total_new_patients=params_dict.get("n_total_new_patients", 20),
+                n_A_new_patients=params_dict.get("n_A_new_patients", 10),
+                n_B_new_patients=params_dict.get("n_B_new_patients", 8),
+                n_N_new_patients=params_dict.get("n_N_new_patients", 2),
+                n_step_down_patients=params_dict.get("n_step_down_patients", 0),
+                minimum_patients=params_dict.get("minimum_patients", 10),
+                maximum_patients=params_dict.get("maximum_patients", 20),
+                new_start_number=params_dict.get("new_start_number", 5)
+            ))
+
 
 def load_default_parameters():
-    """Loads default allocation parameters from a file."""
-    if os.path.exists(DEFAULT_PARAMS_FILE):
-        try:
-            df = pd.read_csv(DEFAULT_PARAMS_FILE)
+    """Loads default allocation parameters from the database."""
+    with get_db() as db:
+        params = db.query(Parameter).filter(Parameter.name == 'default').first()
+
+        if params:
             return {
-                "n_total_new_patients": int(df.iloc[0]["n_total_new_patients"]),
-                "n_A_new_patients": int(df.iloc[0]["n_A_new_patients"]),
-                "n_B_new_patients": int(df.iloc[0]["n_B_new_patients"]),
-                "n_N_new_patients": int(df.iloc[0]["n_N_new_patients"]),
-                "n_step_down_patients": int(df.iloc[0]["n_step_down_patients"]),
-                "minimum_patients": int(df.iloc[0]["minimum_patients"]),
-                "maximum_patients": int(df.iloc[0]["maximum_patients"]),
-                "new_start_number": int(df.iloc[0]["new_start_number"]),
+                "n_total_new_patients": params.n_total_new_patients,
+                "n_A_new_patients": params.n_A_new_patients,
+                "n_B_new_patients": params.n_B_new_patients,
+                "n_N_new_patients": params.n_N_new_patients,
+                "n_step_down_patients": params.n_step_down_patients,
+                "minimum_patients": params.minimum_patients,
+                "maximum_patients": params.maximum_patients,
+                "new_start_number": params.new_start_number,
             }
-        except Exception:
-            pass
     return None
 
+
 def save_default_physicians(df):
-    """Saves default physician data to a file."""
-    df.to_csv(DEFAULT_PHYSICIANS_FILE, index=False)
+    """Saves default physician data to the database."""
+    with get_db() as db:
+        # Clear existing default physicians
+        db.query(DefaultPhysician).delete()
+
+        # Insert all physicians from dataframe
+        for _, row in df.iterrows():
+            name = str(row.get("Physician Name", "")).strip()
+            if not name:
+                continue
+
+            db.add(DefaultPhysician(
+                name=name,
+                team=str(row.get("Team", "A")),
+                is_new=bool(row.get("New Physician", False)),
+                is_buffer=bool(row.get("Buffer", False)),
+                is_working=bool(row.get("Working", True)),
+                total_patients=int(row.get("Total Patients", 0)),
+                step_down_patients=int(row.get("StepDown", 0)),
+                traded_patients=int(row.get("Traded", 0))
+            ))
+
 
 def load_default_physicians():
-    """Loads default physician data from a file."""
-    if os.path.exists(DEFAULT_PHYSICIANS_FILE):
-        try:
-            df = pd.read_csv(DEFAULT_PHYSICIANS_FILE)
-            # Ensure boolean columns are correctly typed
-            bool_cols = ["New Physician", "Buffer", "Working"]
-            for col in bool_cols:
-                if col in df.columns:
-                    df[col] = df[col].astype(bool)
-            # Handle Yesterday column
-            if "Yesterday" in df.columns:
-                df["Yesterday"] = df["Yesterday"].astype(str).replace("nan", "").replace("False", "").replace("True", "")
-            return df
-        except Exception:
-            pass
+    """Loads default physician data from the database."""
+    with get_db() as db:
+        records = db.query(DefaultPhysician).all()
+
+        if records:
+            data = []
+            for p in records:
+                data.append({
+                    "Yesterday": "",
+                    "Physician Name": p.name,
+                    "Team": p.team,
+                    "New Physician": p.is_new,
+                    "Buffer": p.is_buffer,
+                    "Working": p.is_working,
+                    "Total Patients": p.total_patients,
+                    "StepDown": p.step_down_patients,
+                    "Traded": p.traded_patients
+                })
+            return pd.DataFrame(data)
     return None
 
 class Physician():
