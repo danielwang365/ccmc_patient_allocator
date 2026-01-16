@@ -1,16 +1,22 @@
 import streamlit as st
 import pandas as pd
+import os
 from datetime import datetime
 
 # Database imports
 from database import (
     get_db, init_database, get_data_version, increment_data_version,
     Physician as PhysicianModel, MasterPhysician, UserSelection,
-    YesterdayPhysician, Parameter, DefaultPhysician, DataVersion
+    YesterdayPhysician, Parameter, DefaultPhysician, DataVersion,
+    DATABASE_URL
 )
 
 # Initialize database on startup
 init_database()
+
+# Debug: Show database connection info in sidebar
+_db_type = "PostgreSQL" if "postgresql" in DATABASE_URL else "SQLite"
+st.sidebar.markdown(f"**DB:** {_db_type}")
 
 
 def save_data(df):
