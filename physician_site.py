@@ -898,7 +898,7 @@ with st.expander("🏥 Select Working Doctors from Master List", expanded=True):
                                 with checkbox_col:
                                     reset_counter = st.session_state.get("checkbox_reset_counter", 0)
                                     is_checked = doctor_name in st.session_state["selected_physicians"]
-                                    checkbox_value = st.checkbox("", value=is_checked, key=f"doctor_checkbox_{doctor_name}_{reset_counter}")
+                                    checkbox_value = st.checkbox("Select", value=is_checked, key=f"doctor_checkbox_{doctor_name}_{reset_counter}", label_visibility="collapsed")
                                     if checkbox_value:
                                         selected_doctors.append(doctor_name)
                                 
@@ -909,7 +909,7 @@ with st.expander("🏥 Select Working Doctors from Master List", expanded=True):
                                     # Small discrete team selector
                                     current_team = st.session_state["master_team_assignments"].get(doctor_name, "A")
                                     new_team = st.selectbox(
-                                        "",
+                                        "Team",
                                         options=["A", "B", "N"],
                                         index=["A", "B", "N"].index(current_team) if current_team in ["A", "B", "N"] else 0,
                                         key=f"team_select_{doctor_name}",
@@ -943,7 +943,7 @@ with st.expander("🏥 Select Working Doctors from Master List", expanded=True):
                                 with checkbox_col:
                                     reset_counter = st.session_state.get("checkbox_reset_counter", 0)
                                     is_checked = doctor_name in st.session_state["selected_physicians"]
-                                    checkbox_value = st.checkbox("", value=is_checked, key=f"doctor_checkbox_{doctor_name}_{reset_counter}")
+                                    checkbox_value = st.checkbox("Select", value=is_checked, key=f"doctor_checkbox_{doctor_name}_{reset_counter}", label_visibility="collapsed")
                                     if checkbox_value:
                                         selected_doctors.append(doctor_name)
                                 
@@ -954,7 +954,7 @@ with st.expander("🏥 Select Working Doctors from Master List", expanded=True):
                                     # Small discrete team selector
                                     current_team = st.session_state["master_team_assignments"].get(doctor_name, "B")
                                     new_team = st.selectbox(
-                                        "",
+                                        "Team",
                                         options=["A", "B", "N"],
                                         index=["A", "B", "N"].index(current_team) if current_team in ["A", "B", "N"] else 1,
                                         key=f"team_select_{doctor_name}",
@@ -987,7 +987,7 @@ with st.expander("🏥 Select Working Doctors from Master List", expanded=True):
                             with checkbox_col:
                                 reset_counter = st.session_state.get("checkbox_reset_counter", 0)
                                 is_checked = doctor_name in st.session_state["selected_physicians"]
-                                checkbox_value = st.checkbox("", value=is_checked, key=f"doctor_checkbox_{doctor_name}_{reset_counter}")
+                                checkbox_value = st.checkbox("Select", value=is_checked, key=f"doctor_checkbox_{doctor_name}_{reset_counter}", label_visibility="collapsed")
                                 if checkbox_value:
                                     selected_doctors.append(doctor_name)
                             
@@ -998,7 +998,7 @@ with st.expander("🏥 Select Working Doctors from Master List", expanded=True):
                                 # Small discrete team selector
                                 current_team = st.session_state["master_team_assignments"].get(doctor_name, "N")
                                 new_team = st.selectbox(
-                                    "",
+                                    "Team",
                                     options=["A", "B", "N"],
                                     index=["A", "B", "N"].index(current_team) if current_team in ["A", "B", "N"] else 2,
                                     key=f"team_select_{doctor_name}",
