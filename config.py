@@ -8,20 +8,23 @@ from dotenv import load_dotenv
 # Load environment variables from .env file if it exists
 load_dotenv()
 
+# Get the directory where this config file is located (for absolute paths)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Flask configuration
 SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # Password protection - set via environment variable or use default
 APP_PASSWORD = os.environ.get('APP_PASSWORD', 'CRMCPATIENTS')
 
-# File paths for persistent storage
-DATA_FILE = "physician_data.csv"
-YESTERDAY_FILE = "yesterday_physicians.csv"
-SELECTED_FILE = "selected_physicians.csv"
-MASTER_LIST_FILE = "master_physician_list.csv"
-DEFAULT_PARAMS_FILE = "default_parameters.csv"
-DEFAULT_PHYSICIANS_FILE = "default_physicians.csv"
-TEAM_ASSIGNMENTS_FILE = "team_assignments.csv"
+# File paths for persistent storage (using absolute paths)
+DATA_FILE = os.path.join(BASE_DIR, "physician_data.csv")
+YESTERDAY_FILE = os.path.join(BASE_DIR, "yesterday_physicians.csv")
+SELECTED_FILE = os.path.join(BASE_DIR, "selected_physicians.csv")
+MASTER_LIST_FILE = os.path.join(BASE_DIR, "master_physician_list.csv")
+DEFAULT_PARAMS_FILE = os.path.join(BASE_DIR, "default_parameters.csv")
+DEFAULT_PHYSICIANS_FILE = os.path.join(BASE_DIR, "default_physicians.csv")
+TEAM_ASSIGNMENTS_FILE = os.path.join(BASE_DIR, "team_assignments.csv")
 
 # Default master physician list
 DEFAULT_MASTER_LIST = [
