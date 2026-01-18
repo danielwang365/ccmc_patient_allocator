@@ -299,38 +299,48 @@ function setupEventListeners() {
     document.getElementById('copySummaryBtn')?.addEventListener('click', copyTextSummary);
 }
 
-// Generate table from selection
+// Add selected physicians to the table (without replacing existing data)
 async function generateTable() {
-    console.log('generateTable called');
-    console.log('selectedPhysicians:', selectedPhysicians);
-    console.log('teamAssignments:', teamAssignments);
+    // Get current grid data
+    const currentData = [];
+    physicianGridApi.forEachNode(node => currentData.push(node.data));
+    const existingNames = currentData.map(p => p.name);
 
-    const selections = selectedPhysicians.map(name => ({
-        name,
-        team: teamAssignments[name] || 'A',
-    }));
+    // Get selected physicians that aren't already in the table
+    const newSelections = selectedPhysicians.filter(name => !existingNames.includes(name));
 
-    console.log('selections:', selections);
-
-    if (selections.length === 0) {
-        alert('Please select at least one physician.');
+    if (newSelections.length === 0) {
+        if (selectedPhysicians.length === 0) {
+            alert('Please select at least one physician.');
+        } else {
+            showSaveIndicator('All selected already in table!');
+        }
         return;
     }
 
-    try {
-        const result = await API.generateTable(selections);
-        console.log('API result:', result);
-        if (result && result.physicians) {
-            physicianGridApi.setGridOption('rowData', result.physicians);
-            showSaveIndicator('Table generated!');
-        } else {
-            console.error('No physicians in result:', result);
-            alert('Error generating table. Check console for details.');
-        }
-    } catch (error) {
-        console.error('Error in generateTable:', error);
-        alert('Error generating table: ' + error.message);
+    // Add new physicians with their team assignments
+    for (const name of newSelections) {
+        const team = teamAssignments[name] || 'A';
+        const wasYesterday = yesterdayPhysicians.includes(name);
+        currentData.push({
+            name: name,
+            yesterday: wasYesterday ? name : '',
+            team: team,
+            is_new: false,
+            is_buffer: false,
+            is_working: true,
+            total_patients: 0,
+            step_down_patients: 0,
+            transferred_patients: 0,
+            traded_patients: 0,
+        });
     }
+
+    // Save and update grid
+    await API.bulkUpdatePhysicians(currentData);
+    physicianGridApi.setGridOption('rowData', currentData);
+    renderMasterList();
+    showSaveIndicator(`Added ${newSelections.length} physician(s)!`);
 }
 
 // Select all physicians in master list
