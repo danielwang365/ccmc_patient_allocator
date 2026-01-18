@@ -165,18 +165,18 @@ function renderMasterList() {
         let moveButtons = '';
         if (team === 'A') {
             moveButtons = `
-                <button class="move-team-btn" data-target="B" title="Move to Team B">→B</button>
-                <button class="move-team-btn" data-target="N" title="Move to Team N">→N</button>
+                <button class="move-team-btn" data-target="B" title="Move to Team B">B</button>
+                <button class="move-team-btn" data-target="N" title="Move to Team N">N</button>
             `;
         } else if (team === 'B') {
             moveButtons = `
-                <button class="move-team-btn" data-target="A" title="Move to Team A">→A</button>
-                <button class="move-team-btn" data-target="N" title="Move to Team N">→N</button>
+                <button class="move-team-btn" data-target="A" title="Move to Team A">A</button>
+                <button class="move-team-btn" data-target="N" title="Move to Team N">N</button>
             `;
         } else {
             moveButtons = `
-                <button class="move-team-btn" data-target="A" title="Move to Team A">→A</button>
-                <button class="move-team-btn" data-target="B" title="Move to Team B">→B</button>
+                <button class="move-team-btn" data-target="A" title="Move to Team A">A</button>
+                <button class="move-team-btn" data-target="B" title="Move to Team B">B</button>
             `;
         }
 
@@ -339,6 +339,9 @@ async function generateTable() {
     // Save and update grid
     await API.bulkUpdatePhysicians(currentData);
     physicianGridApi.setGridOption('rowData', currentData);
+
+    // Clear selections after adding
+    selectedPhysicians = [];
     renderMasterList();
     showSaveIndicator(`Added ${newSelections.length} physician(s)!`);
 }
