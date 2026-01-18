@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Allocation Summary - Patient Allocator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #333;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .summary-header {
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #333;
+        }
+
+        .summary-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 8px 16px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .stat-label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .team-section {
+            margin-bottom: 20px;
+        }
+
+        .team-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding: 6px 12px;
+            background: #eee;
+            font-weight: 600;
+        }
+
+        .team-badge {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            line-height: 20px;
+            text-align: center;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 11px;
+        }
+
+        .team-badge-a {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .team-badge-b {
+            background: #ede9fe;
+            color: #6d28d9;
+        }
+
+        .team-badge-n {
+            background: #fce7f3;
+            color: #be185d;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+        }
+
+        th, td {
+            padding: 6px 8px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+
+        th {
+            background: #f9f9f9;
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+
+        td {
+            font-size: 11px;
+        }
+
+        .numeric {
+            text-align: right;
+        }
+
+        .new-badge {
+            display: inline-block;
+            padding: 1px 4px;
+            background: #fef3c7;
+            color: #92400e;
+            border-radius: 2px;
+            font-size: 9px;
+            font-weight: 500;
+            margin-left: 4px;
+        }
+
+        .buffer-badge {
+            display: inline-block;
+            padding: 1px 4px;
+            background: #e0e7ff;
+            color: #3730a3;
+            border-radius: 2px;
+            font-size: 9px;
+            font-weight: 500;
+            margin-left: 4px;
+        }
+
+        .highlight {
+            background: #fef3c7;
+        }
+
+        .team-totals {
+            font-weight: 600;
+            background: #f5f5f5;
+        }
+
+        .footer {
+            margin-top: 20px;
+            padding-top: 12px;
+            border-top: 1px solid #ddd;
+            font-size: 10px;
+            color: #666;
+            text-align: center;
+        }
+
+        @media print {
+            body {
+                padding: 10px;
+            }
+
+            .no-print {
+                display: none;
+            }
+
+            @page {
+                margin: 0.5in;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="summary-header">
+        <h1>Patient Allocation Summary</h1>
+        <div class="summary-stats">
+            <div class="stat-item">
+                <div class="stat-label">Total Patients</div>
+                <div class="stat-value">{{ summary.total_patients }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Total Step-Down</div>
+                <div class="stat-value">{{ summary.total_step_down }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Patients Gained</div>
+                <div class="stat-value">{{ summary.total_gained }}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">Working Physicians</div>
+                <div class="stat-value">{{ summary.working_count }}</div>
+            </div>
+        </div>
+    </div>
+
+    {% for team_letter, team_name in [('A', 'Team A'), ('B', 'Team B'), ('N', 'Team N')] %}
+    {% set team_physicians = results | selectattr('team', 'equalto', team_letter) | list %}
+    {% if team_physicians %}
+    <div class="team-section">
+        <div class="team-header">
+            <span class="team-badge team-badge-{{ team_letter | lower }}">{{ team_letter }}</span>
+            <span>{{ team_name }} ({{ team_physicians | length }} physicians)</span>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Physician</th>
+                    <th class="numeric">Original</th>
+                    <th class="numeric">Total</th>
+                    <th class="numeric">Step-Down</th>
+                    <th class="numeric">Out of Floor</th>
+                    <th class="numeric">Traded</th>
+                    <th class="numeric">Gained</th>
+                    <th class="numeric">Gained SD</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for physician in team_physicians %}
+                <tr{% if physician.is_new %} class="highlight"{% endif %}>
+                    <td>
+                        {{ physician.name }}
+                        {% if physician.is_new %}<span class="new-badge">NEW</span>{% endif %}
+                        {% if physician.is_buffer %}<span class="buffer-badge">BUFFER</span>{% endif %}
+                    </td>
+                    <td class="numeric">{{ physician.original_total_patients }}</td>
+                    <td class="numeric">{{ physician.total_patients }}</td>
+                    <td class="numeric">{{ physician.step_down_patients }}</td>
+                    <td class="numeric">{{ physician.transferred_patients }}</td>
+                    <td class="numeric">{{ physician.traded_patients }}</td>
+                    <td class="numeric">{{ physician.gained }}</td>
+                    <td class="numeric">{{ physician.gained_step_down }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="team-totals">
+                    <td>Team {{ team_letter }} Totals</td>
+                    <td class="numeric">{{ team_physicians | sum(attribute='original_total_patients') }}</td>
+                    <td class="numeric">{{ team_physicians | sum(attribute='total_patients') }}</td>
+                    <td class="numeric">{{ team_physicians | sum(attribute='step_down_patients') }}</td>
+                    <td class="numeric">{{ team_physicians | sum(attribute='transferred_patients') }}</td>
+                    <td class="numeric">{{ team_physicians | sum(attribute='traded_patients') }}</td>
+                    <td class="numeric">{{ team_physicians | sum(attribute='gained') }}</td>
+                    <td class="numeric">{{ team_physicians | sum(attribute='gained_step_down') }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    <div class="footer">
+        Generated on {{ timestamp }}
+    </div>
+
+    <div class="no-print" style="margin-top: 20px; text-align: center;">
+        <button onclick="window.print()" style="padding: 10px 20px; font-size: 14px; cursor: pointer;">
+            Print Summary
+        </button>
+        <button onclick="window.close()" style="padding: 10px 20px; font-size: 14px; cursor: pointer; margin-left: 10px;">
+            Close
+        </button>
+    </div>
+</body>
+</html>

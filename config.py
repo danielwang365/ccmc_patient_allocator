@@ -1,0 +1,49 @@
+"""
+Configuration for the Patient Allocator application.
+"""
+
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+load_dotenv()
+
+# Flask configuration
+SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# Password protection - set via environment variable or use default
+APP_PASSWORD = os.environ.get('APP_PASSWORD', 'CRMCPATIENTS')
+
+# File paths for persistent storage
+DATA_FILE = "physician_data.csv"
+YESTERDAY_FILE = "yesterday_physicians.csv"
+SELECTED_FILE = "selected_physicians.csv"
+MASTER_LIST_FILE = "master_physician_list.csv"
+DEFAULT_PARAMS_FILE = "default_parameters.csv"
+DEFAULT_PHYSICIANS_FILE = "default_physicians.csv"
+
+# Default master physician list
+DEFAULT_MASTER_LIST = [
+    "Adhiakha", "Wang", "Jaini", "JemJem", "Batth",
+    "Rajarathinam", "Shehata", "Yousef", "Aung", "Bhogireddy",
+    "Souliman", "Zaidi", "Attrapisi", "Ali", "Batlawala",
+    "Sakkalaek", "Shirani", "Oladipo", "Abadi", "Kaur",
+    "Narra", "Suman", "Win", "Das", "Alchi", "Reddy",
+    "Hung", "Nwadei", "Lamba", "Ahir", "Mahajan", "Abukraa",
+    "Keralos", "Nibber"
+]
+
+# Default allocation parameters
+DEFAULT_PARAMETERS = {
+    "n_total_new_patients": 20,
+    "n_A_new_patients": 10,
+    "n_B_new_patients": 8,
+    "n_N_new_patients": 2,
+    "n_step_down_patients": 0,
+    "minimum_patients": 10,
+    "maximum_patients": 20,
+    "new_start_number": 5
+}
+
+# Team options
+TEAMS = ["A", "B", "N"]
