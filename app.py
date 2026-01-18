@@ -273,12 +273,23 @@ def run_allocation():
     # Convert to Physician objects
     physicians = [Physician.from_dict(p) for p in physician_data]
 
-    # Run allocation
+    # Run allocation with unpacked parameters
     try:
-        results, summary = allocate_patients(physicians, parameters)
+        result = allocate_patients(
+            physicians=physicians,
+            n_total_new_patients=parameters.get('n_total_new_patients', 20),
+            n_A_new_patients=parameters.get('n_A_new_patients', 0),
+            n_B_new_patients=parameters.get('n_B_new_patients', 0),
+            n_N_new_patients=parameters.get('n_N_new_patients', 0),
+            new_start_number=parameters.get('new_start_number', 10),
+            minimum_patients=parameters.get('minimum_patients', 10),
+            n_step_down_patients=parameters.get('n_step_down_patients', 0),
+            maximum_patients=parameters.get('maximum_patients', 20),
+        )
+        # Result is a dict with 'results', 'summary', and 'remaining_pools'
         return jsonify({
-            'results': [r.to_dict() for r in results],
-            'summary': summary,
+            'results': result.get('results', []),
+            'summary': result.get('summary', {}),
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
