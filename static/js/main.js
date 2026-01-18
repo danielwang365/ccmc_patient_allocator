@@ -279,20 +279,35 @@ function setupEventListeners() {
 
 // Generate table from selection
 async function generateTable() {
+    console.log('generateTable called');
+    console.log('selectedPhysicians:', selectedPhysicians);
+    console.log('teamAssignments:', teamAssignments);
+
     const selections = selectedPhysicians.map(name => ({
         name,
         team: teamAssignments[name] || 'A',
     }));
+
+    console.log('selections:', selections);
 
     if (selections.length === 0) {
         alert('Please select at least one physician.');
         return;
     }
 
-    const result = await API.generateTable(selections);
-    if (result && result.physicians) {
-        physicianGridApi.setGridOption('rowData', result.physicians);
-        showSaveIndicator('Table generated!');
+    try {
+        const result = await API.generateTable(selections);
+        console.log('API result:', result);
+        if (result && result.physicians) {
+            physicianGridApi.setGridOption('rowData', result.physicians);
+            showSaveIndicator('Table generated!');
+        } else {
+            console.error('No physicians in result:', result);
+            alert('Error generating table. Check console for details.');
+        }
+    } catch (error) {
+        console.error('Error in generateTable:', error);
+        alert('Error generating table: ' + error.message);
     }
 }
 

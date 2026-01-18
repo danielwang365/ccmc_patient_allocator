@@ -76,18 +76,7 @@ def create_physician():
     data = request.json
     physicians = load_physicians()
 
-    new_physician = Physician(
-        name=data.get('name', ''),
-        yesterday=data.get('yesterday', ''),
-        team=data.get('team', 'A'),
-        is_new=data.get('is_new', False),
-        is_buffer=data.get('is_buffer', False),
-        is_working=data.get('is_working', True),
-        total_patients=data.get('total_patients', 0),
-        step_down_patients=data.get('step_down_patients', 0),
-        transferred_patients=data.get('transferred_patients', 0),
-        traded_patients=data.get('traded_patients', 0),
-    )
+    new_physician = Physician.from_dict(data)
 
     physicians.append(new_physician)
     save_physicians(physicians)
@@ -103,18 +92,10 @@ def update_physician(name):
 
     for i, p in enumerate(physicians):
         if p.name == name:
-            physicians[i] = Physician(
-                name=data.get('name', p.name),
-                yesterday=data.get('yesterday', p.yesterday),
-                team=data.get('team', p.team),
-                is_new=data.get('is_new', p.is_new),
-                is_buffer=data.get('is_buffer', p.is_buffer),
-                is_working=data.get('is_working', p.is_working),
-                total_patients=data.get('total_patients', p.total_patients),
-                step_down_patients=data.get('step_down_patients', p.step_down_patients),
-                transferred_patients=data.get('transferred_patients', p.transferred_patients),
-                traded_patients=data.get('traded_patients', p.traded_patients),
-            )
+            # Merge existing data with new data
+            merged = p.to_dict()
+            merged.update(data)
+            physicians[i] = Physician.from_dict(merged)
             save_physicians(physicians)
             return jsonify(physicians[i].to_dict())
 
@@ -136,21 +117,7 @@ def delete_physician(name):
 def bulk_update_physicians():
     """Bulk update all physicians."""
     data = request.json
-    physicians = [
-        Physician(
-            name=p.get('name', ''),
-            yesterday=p.get('yesterday', ''),
-            team=p.get('team', 'A'),
-            is_new=p.get('is_new', False),
-            is_buffer=p.get('is_buffer', False),
-            is_working=p.get('is_working', True),
-            total_patients=p.get('total_patients', 0),
-            step_down_patients=p.get('step_down_patients', 0),
-            transferred_patients=p.get('transferred_patients', 0),
-            traded_patients=p.get('traded_patients', 0),
-        )
-        for p in data
-    ]
+    physicians = [Physician.from_dict(p) for p in data]
     save_physicians(physicians)
     return jsonify({'success': True, 'count': len(physicians)})
 
@@ -277,18 +244,18 @@ def generate_table():
         team = sel.get('team', 'A')
         was_yesterday = name in yesterday_list
 
-        physicians.append(Physician(
-            name=name,
-            yesterday=name if was_yesterday else '',
-            team=team,
-            is_new=False,
-            is_buffer=False,
-            is_working=True,
-            total_patients=0,
-            step_down_patients=0,
-            transferred_patients=0,
-            traded_patients=0,
-        ))
+        physicians.append(Physician.from_dict({
+            'name': name,
+            'yesterday': name if was_yesterday else '',
+            'team': team,
+            'is_new': False,
+            'is_buffer': False,
+            'is_working': True,
+            'total_patients': 0,
+            'step_down_patients': 0,
+            'transferred_patients': 0,
+            'traded_patients': 0,
+        }))
 
     save_physicians(physicians)
     return jsonify({'physicians': [p.to_dict() for p in physicians]})
@@ -304,21 +271,7 @@ def run_allocation():
     parameters = data.get('parameters', {})
 
     # Convert to Physician objects
-    physicians = [
-        Physician(
-            name=p.get('name', ''),
-            yesterday=p.get('yesterday', ''),
-            team=p.get('team', 'A'),
-            is_new=p.get('is_new', False),
-            is_buffer=p.get('is_buffer', False),
-            is_working=p.get('is_working', True),
-            total_patients=p.get('total_patients', 0),
-            step_down_patients=p.get('step_down_patients', 0),
-            transferred_patients=p.get('transferred_patients', 0),
-            traded_patients=p.get('traded_patients', 0),
-        )
-        for p in physician_data
-    ]
+    physicians = [Physician.from_dict(p) for p in physician_data]
 
     # Run allocation
     try:
