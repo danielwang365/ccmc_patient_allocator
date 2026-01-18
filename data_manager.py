@@ -106,10 +106,10 @@ def load_physicians():
                     is_new=_str_to_bool(row.get("New Physician", False)),
                     is_buffer=_str_to_bool(row.get("Buffer", False)),
                     is_working=_str_to_bool(row.get("Working", True)),
-                    total_patients=_safe_int(row.get("Total Patients", 0)),
-                    step_down_patients=_safe_int(row.get("StepDown", 0)),
-                    transferred_patients=_safe_int(row.get("Out of floor", 0)),
-                    traded_patients=_safe_int(row.get("Traded", 0))
+                    n_total_patients=_safe_int(row.get("Total Patients", 0)),
+                    n_step_down_patients=_safe_int(row.get("StepDown", 0)),
+                    n_transferred_patients=_safe_int(row.get("Out of floor", 0)),
+                    n_traded_patients=_safe_int(row.get("Traded", 0))
                 ))
 
         # Sort alphabetically by physician name
