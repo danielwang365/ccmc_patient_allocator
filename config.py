@@ -21,6 +21,7 @@ SELECTED_FILE = "selected_physicians.csv"
 MASTER_LIST_FILE = "master_physician_list.csv"
 DEFAULT_PARAMS_FILE = "default_parameters.csv"
 DEFAULT_PHYSICIANS_FILE = "default_physicians.csv"
+TEAM_ASSIGNMENTS_FILE = "team_assignments.csv"
 
 # Default master physician list
 DEFAULT_MASTER_LIST = [

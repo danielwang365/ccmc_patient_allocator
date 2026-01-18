@@ -8,7 +8,7 @@ import csv
 from config import (
     DATA_FILE, YESTERDAY_FILE, SELECTED_FILE,
     MASTER_LIST_FILE, DEFAULT_PARAMS_FILE, DEFAULT_PHYSICIANS_FILE,
-    DEFAULT_MASTER_LIST, DEFAULT_PARAMETERS
+    TEAM_ASSIGNMENTS_FILE, DEFAULT_MASTER_LIST, DEFAULT_PARAMETERS
 )
 from models import Physician
 
@@ -365,3 +365,31 @@ def load_selected():
 def save_selected(names):
     """Alias for save_selected_physicians."""
     save_selected_physicians(names)
+
+
+def save_team_assignments(assignments):
+    """Save team assignments to a CSV file. assignments is a dict {name: team}."""
+    with open(TEAM_ASSIGNMENTS_FILE, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["Physician Name", "Team"])
+        for name, team in assignments.items():
+            writer.writerow([name, team])
+
+
+def load_team_assignments():
+    """Load team assignments from a CSV file. Returns a dict {name: team}."""
+    if not os.path.exists(TEAM_ASSIGNMENTS_FILE):
+        return {}
+
+    try:
+        assignments = {}
+        with open(TEAM_ASSIGNMENTS_FILE, 'r', newline='') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                name = str(row.get("Physician Name", "")).strip()
+                team = str(row.get("Team", "A")).strip()
+                if name:
+                    assignments[name] = team if team in ("A", "B", "N") else "A"
+        return assignments
+    except Exception:
+        return {}

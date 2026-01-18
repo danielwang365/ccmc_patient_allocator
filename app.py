@@ -11,7 +11,8 @@ from data_manager import (
     load_yesterday, save_yesterday,
     load_master_list, save_master_list,
     load_parameters, save_parameters,
-    load_selected, save_selected
+    load_selected, save_selected,
+    load_team_assignments, save_team_assignments
 )
 from allocation import allocate_patients
 
@@ -241,6 +242,24 @@ def save_selected_list():
     names = data.get('names', [])
     save_selected(names)
     return jsonify({'success': True, 'names': names})
+
+
+# Team assignments API routes
+@app.route('/api/team-assignments', methods=['GET'])
+@login_required
+def get_team_assignments():
+    """Get team assignments."""
+    return jsonify(load_team_assignments())
+
+
+@app.route('/api/team-assignments', methods=['POST'])
+@login_required
+def save_team_assignments_route():
+    """Save team assignments."""
+    data = request.json
+    assignments = data.get('assignments', {})
+    save_team_assignments(assignments)
+    return jsonify({'success': True, 'assignments': assignments})
 
 
 # Generate table API route

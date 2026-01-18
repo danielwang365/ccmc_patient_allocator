@@ -44,10 +44,16 @@ async function loadMasterList() {
     const selected = await API.getSelected();
     selectedPhysicians = selected || [];
 
-    // Load team assignments from current physicians
+    // Load saved team assignments first
+    const savedAssignments = await API.getTeamAssignments();
+    if (savedAssignments && Object.keys(savedAssignments).length > 0) {
+        teamAssignments = savedAssignments;
+    }
+
+    // Also check current physicians for any not in saved assignments
     const physicians = await API.getPhysicians();
     physicians.forEach(p => {
-        if (p.name) {
+        if (p.name && !teamAssignments[p.name]) {
             teamAssignments[p.name] = p.team || 'A';
         }
     });
@@ -192,10 +198,13 @@ function renderMasterList() {
 
         // Move team button handlers
         item.querySelectorAll('.move-team-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
+            btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const targetTeam = btn.dataset.target;
                 teamAssignments[name] = targetTeam;
+                // Save team assignments to backend
+                await API.saveTeamAssignments(teamAssignments);
+                showSaveIndicator('Team updated!');
                 renderMasterList(); // Re-render to move item to new column
             });
         });

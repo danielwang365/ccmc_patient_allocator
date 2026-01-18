@@ -104,6 +104,18 @@ const API = {
         });
     },
 
+    // Team Assignments
+    async getTeamAssignments() {
+        return this.fetch('/api/team-assignments');
+    },
+
+    async saveTeamAssignments(assignments) {
+        return this.fetch('/api/team-assignments', {
+            method: 'POST',
+            body: JSON.stringify({ assignments }),
+        });
+    },
+
     // Allocation
     async runAllocation(physicians, parameters) {
         return this.fetch('/api/allocate', {
