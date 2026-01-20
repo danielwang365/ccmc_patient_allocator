@@ -290,6 +290,9 @@ function setupEventListeners() {
     // Clear numbers button
     document.getElementById('clearNumbersBtn')?.addEventListener('click', clearPatientData);
 
+    // Clear all button
+    document.getElementById('clearAllBtn')?.addEventListener('click', clearAllPhysicians);
+
     // Run allocation button
     document.getElementById('runAllocationBtn')?.addEventListener('click', runAllocation);
 
@@ -554,6 +557,16 @@ async function clearPatientData() {
     await API.bulkUpdatePhysicians(rowData);
     physicianGridApi.setGridOption('rowData', rowData);
     showSaveIndicator('Numbers cleared!');
+}
+
+// Clear all physicians from the table
+async function clearAllPhysicians() {
+    if (!confirm('Delete ALL physicians from the table? This cannot be undone.')) return;
+
+    await API.bulkUpdatePhysicians([]);
+    physicianGridApi.setGridOption('rowData', []);
+    renderMasterList();
+    showSaveIndicator('All physicians cleared!');
 }
 
 // Run allocation
